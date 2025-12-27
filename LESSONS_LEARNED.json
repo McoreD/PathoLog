@@ -1,0 +1,123 @@
+{
+  "project": "PathoLog - Vite React + SWA Functions + Neon Postgres",
+  "dateCreated": "2025-12-28",
+  "purpose": "Critical lessons learned to avoid repeating deployment and debugging issues in this app",
+  "lessonsLearned": [
+    {
+      "category": "Architecture & Hosting",
+      "severity": "CRITICAL",
+      "lessons": [
+        {
+          "issue": "Separate App Service API adds cost and complexity",
+          "symptom": "Free tier limits or extra configuration block progress",
+          "solution": "Default to SWA integrated API unless scope explicitly forbids it",
+          "rule": "Always choose SWA integrated API unless the scope document says not to"
+        },
+        {
+          "issue": "Direct DB access from browser is unsafe and impossible",
+          "symptom": "Need for a backend even with SWA-only hosting",
+          "solution": "Use SWA Functions for all database access",
+          "rule": "Never connect to Neon directly from the frontend"
+        }
+      ]
+    },
+    {
+      "category": "Azure Static Web Apps Auth",
+      "severity": "HIGH",
+      "lessons": [
+        {
+          "issue": "SWA auth requires platform configuration, not env vars",
+          "symptom": "Login buttons appear but /.auth/me returns anonymous",
+          "solution": "Enable providers in SWA Authentication and use /.auth/login/*",
+          "rule": "Always verify SWA Authentication settings before debugging UI"
+        },
+        {
+          "issue": "Auth context must be derived from x-ms-client-principal",
+          "symptom": "API returns 401 even when user is logged in",
+          "solution": "Parse x-ms-client-principal in Functions and upsert user",
+          "rule": "All API auth should rely on SWA principal header"
+        }
+      ]
+    },
+    {
+      "category": "SWA Deployment",
+      "severity": "HIGH",
+      "lessons": [
+        {
+          "issue": "SWA build uses only repo workflow settings",
+          "symptom": "API not deployed because api_location missing",
+          "solution": "Set api_location to backend and ensure Functions host.json exists",
+          "rule": "Always confirm app_location, api_location, output_location"
+        },
+        {
+          "issue": "Node version mismatch breaks builds",
+          "symptom": "Oryx fails with unsupported Node",
+          "solution": "Pin to a supported Node 20.x version in workflow",
+          "rule": "Keep SWA Node version aligned with Vite requirements"
+        }
+      ]
+    },
+    {
+      "category": "Database & Env Vars",
+      "severity": "HIGH",
+      "lessons": [
+        {
+          "issue": "Missing DATABASE_URL prevents all API routes",
+          "symptom": "Add patient or load data fails with fetch errors",
+          "solution": "Set DATABASE_URL in SWA environment variables",
+          "rule": "DATABASE_URL is mandatory for production"
+        },
+        {
+          "issue": "Local settings do not deploy",
+          "symptom": "Works locally but fails in production",
+          "solution": "Set all required vars in SWA config",
+          "rule": "Never assume local.settings.json carries to production"
+        }
+      ]
+    },
+    {
+      "category": "Frontend Debugging",
+      "severity": "MEDIUM",
+      "lessons": [
+        {
+          "issue": "Silent errors hide API failures",
+          "symptom": "Buttons appear to do nothing",
+          "solution": "Surface HTTP status + message in UI when requests fail",
+          "rule": "Always show error details during troubleshooting"
+        },
+        {
+          "issue": "Button failures lack actionable details",
+          "symptom": "User sees only generic failure text",
+          "solution": "Persist per-action error details (HTTP status + response text) for all UI actions",
+          "rule": "Every button-triggered request must record and display detailed error info"
+        }
+      ]
+    }
+  ],
+  "criticalRules": [
+    "Always choose SWA integrated API unless the scope document says not to",
+    "Never connect to Neon directly from the frontend",
+    "Always set DATABASE_URL in SWA environment variables",
+    "Always use /.auth/login/* and /.auth/me for SWA auth",
+    "Always parse x-ms-client-principal in Functions for auth",
+    "Never assume local.settings.json values deploy to production"
+  ],
+  "quickReferenceChecklist": {
+    "beforeDeployment": [
+      "Set DATABASE_URL in SWA settings",
+      "Enable Google and Microsoft providers in SWA Authentication",
+      "Verify api_location points to backend",
+      "Confirm Node version is supported by Oryx"
+    ],
+    "whenDebuggingAuth": [
+      "Check /.auth/me returns authenticated principal",
+      "Verify x-ms-client-principal header in API",
+      "Confirm provider config in SWA Authentication"
+    ],
+    "whenDebuggingApi": [
+      "Check /api/health response",
+      "Verify DATABASE_URL in SWA config",
+      "Check Functions logs for startup errors"
+    ]
+  }
+}

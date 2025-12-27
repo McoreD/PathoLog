@@ -179,6 +179,12 @@ export default function App() {
     }
   }, [selectedPatientId]);
 
+  const recordError = (action: string, err: unknown, fallback: string) => {
+    const message = err instanceof Error ? err.message : fallback;
+    setStatus(fallback);
+    setDebugError(`${action}: ${message}`);
+  };
+
   const loadPatients = async () => {
     const data = await fetchJSON<{ patients: Patient[] }>("/patients");
     setPatients(data.patients);
@@ -237,8 +243,7 @@ export default function App() {
       setDebugInfo("Create patient succeeded");
       setDebugError(null);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Could not create patient");
-      setDebugError(err instanceof Error ? err.message : "Create patient failed");
+      recordError("Create patient", err, "Could not create patient");
     } finally {
       setBusy(false);
     }
@@ -274,7 +279,7 @@ export default function App() {
       await loadResults(selectedPatientId);
       await loadNeedsReview();
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Upload failed");
+      recordError("Upload report", err, "Upload failed");
     } finally {
       setBusy(false);
       if (fileInput) {
@@ -299,7 +304,7 @@ export default function App() {
         await loadResults(selectedPatientId);
       }
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to save mapping");
+      recordError("Save short code", err, "Failed to save mapping");
     }
   };
 
@@ -312,7 +317,7 @@ export default function App() {
       setTrendData(data.series);
       setTrendCode(analyteShortCode);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to load trend");
+      recordError("Load trend", err, "Failed to load trend");
     }
   };
 
@@ -321,7 +326,7 @@ export default function App() {
       const data = await fetchJSON<{ anomalies: Anomaly[] }>(`/patients/${patientId}/integrity/anomalies`);
       setAnomalies(data.anomalies);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to load anomalies");
+      recordError("Load anomalies", err, "Failed to load anomalies");
     }
   };
 
@@ -342,7 +347,7 @@ export default function App() {
       setStatus("Mapping dictionary updated");
       setMappingForm({ pattern: "", shortCode: "" });
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to save mapping entry");
+      recordError("Save mapping entry", err, "Failed to save mapping entry");
     }
   };
 
@@ -395,6 +400,7 @@ export default function App() {
         </section>
       ) : (
         <>
+          {debugError ? <div className="card"><div className="status">Error: {debugError}</div></div> : null}
           <section className="grid">
             <div className="card">
               <h2>Patients</h2>
