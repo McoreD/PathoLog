@@ -5,6 +5,7 @@ import { env } from "./env.js";
 import { User } from "@prisma/client";
 import { logger } from "./logger.js";
 import { prisma } from "./db.js";
+import { ensureFamilyAccountForUser } from "./family.js";
 
 export const SESSION_COOKIE = "patholog_session";
 
@@ -65,6 +66,7 @@ export async function authMiddleware(
   if (!user) {
     return res.status(401).json({ error: "User not found" });
   }
+  await ensureFamilyAccountForUser(user);
   req.user = user;
   next();
 }

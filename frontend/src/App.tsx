@@ -11,6 +11,16 @@ type Report = {
   sourceFile?: { originalFilename: string };
 };
 type ReviewReport = Report & { patient?: { fullName: string } };
+type ResultRow = {
+  id: string;
+  analyteNameOriginal: string;
+  analyteShortCode: string | null;
+  valueNumeric?: number | null;
+  valueText?: string | null;
+  unitOriginal?: string | null;
+  reportedDatetimeLocal?: string | null;
+  resultType: string;
+};
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
@@ -41,7 +51,9 @@ export default function App() {
   const [selectedPatientId, setSelectedPatientId] = useState<string>("");
   const [reports, setReports] = useState<Report[]>([]);
   const [needsReview, setNeedsReview] = useState<ReviewReport[]>([]);
+  const [results, setResults] = useState<ResultRow[]>([]);
   const [patientForm, setPatientForm] = useState({ fullName: "", dob: "", sex: "unknown" });
+  const [mappingForm, setMappingForm] = useState({ pattern: "", shortCode: "" });
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -60,8 +72,10 @@ export default function App() {
   useEffect(() => {
     if (selectedPatientId) {
       loadReports(selectedPatientId);
+      loadResults(selectedPatientId);
     } else {
       setReports([]);
+      setResults([]);
     }
   }, [selectedPatientId]);
 
@@ -81,6 +95,11 @@ export default function App() {
   const loadReports = async (patientId: string) => {
     const data = await fetchJSON<{ reports: Report[] }>(`/patients/${patientId}/reports`);
     setReports(data.reports);
+  };
+
+  const loadResults = async (patientId: string) => {
+    const data = await fetchJSON<{ results: ResultRow[] }>(`/patients/${patientId}/results`);
+    setResults(data.results);
   };
 
   const handleGoogle = async (cred: CredentialResponse) => {
@@ -153,6 +172,7 @@ export default function App() {
       }
       setStatus("Upload saved");
       await loadReports(selectedPatientId);
+      await loadResults(selectedPatientId);
       await loadNeedsReview();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Upload failed");
@@ -170,6 +190,43 @@ export default function App() {
     setPatients([]);
     setReports([]);
     setSelectedPatientId("");
+  };
+
+  const saveShortCode = async (resultId: string, code: string) => {
+    if (!code.trim()) return;
+    try {
+      await fetchJSON(`/results/${resultId}/confirm-mapping`, {
+        method: "PATCH",
+        body: JSON.stringify({ analyte_short_code: code }),
+      });
+      setStatus("Mapping saved");
+      if (selectedPatientId) {
+        await loadResults(selectedPatientId);
+      }
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to save mapping");
+    }
+  };
+
+  const saveMappingDictionary = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!mappingForm.pattern.trim() || !mappingForm.shortCode.trim()) {
+      setStatus("Pattern and short code are required");
+      return;
+    }
+    try {
+      await fetchJSON("/mapping-dictionary", {
+        method: "POST",
+        body: JSON.stringify({
+          analyte_name_pattern: mappingForm.pattern,
+          analyte_short_code: mappingForm.shortCode,
+        }),
+      });
+      setStatus("Mapping dictionary updated");
+      setMappingForm({ pattern: "", shortCode: "" });
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to save mapping entry");
+    }
   };
 
   const headerText = useMemo(() => {
@@ -328,6 +385,71 @@ export default function App() {
                 ))}
               </ul>
             )}
+          </section>
+
+          <section className="card">
+            <h2>Results</h2>
+            {!results.length ? (
+              <p className="muted">No results ingested yet for this patient.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Analyte</th>
+                    <th>Value</th>
+                    <th>Short code</th>
+                    <th>Reported</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.map((r) => (
+                    <tr key={r.id}>
+                      <td>
+                        <div>{r.analyteNameOriginal}</div>
+                        <div className="muted small">{r.resultType}</div>
+                      </td>
+                      <td>
+                        {r.valueNumeric ?? r.valueText ?? ""}
+                        {r.unitOriginal ? ` ${r.unitOriginal}` : ""}
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          defaultValue={r.analyteShortCode ?? ""}
+                          maxLength={8}
+                          onBlur={(e) => saveShortCode(r.id, e.target.value)}
+                        />
+                      </td>
+                      <td>{r.reportedDatetimeLocal ? formatDate(r.reportedDatetimeLocal) : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <section className="card">
+            <h2>Add mapping dictionary entry</h2>
+            <form className="stack" onSubmit={saveMappingDictionary}>
+              <label>
+                Analyte name pattern
+                <input
+                  type="text"
+                  value={mappingForm.pattern}
+                  onChange={(e) => setMappingForm({ ...mappingForm, pattern: e.target.value })}
+                />
+              </label>
+              <label>
+                Preferred short code
+                <input
+                  type="text"
+                  value={mappingForm.shortCode}
+                  onChange={(e) => setMappingForm({ ...mappingForm, shortCode: e.target.value })}
+                  maxLength={8}
+                />
+              </label>
+              <button type="submit">Save mapping</button>
+            </form>
           </section>
         </>
       )}

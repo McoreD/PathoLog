@@ -229,6 +229,7 @@ model Report {
   globalComments                 String?
   rawText                        String?
   rawTextExtractionMethod        String?
+  parsedPayloadJson              Json?
   pageCount                      Int?
   parsingStatus                  ParsingStatus @default(pending)
   parsingVersion                 String        @default("0.0.1")

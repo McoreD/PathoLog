@@ -10,6 +10,9 @@ import { createStorage } from "./storage.js";
 import { v4 as uuidv4 } from "uuid";
 import { prisma } from "./db.js";
 import { parseReport } from "./parser.js";
+import { ensureFamilyAccountForUser } from "./family.js";
+import { ingestParsedReport } from "./ingest.js";
+import { UserInputError } from "./utils/errors.js";
 
 const storage = createStorage();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -36,6 +39,7 @@ app.post("/auth/google", async (req, res) => {
       update: { googleSub: sub, fullName },
       create: { email, googleSub: sub, fullName },
     });
+    await ensureFamilyAccountForUser(user);
     const token = await createSessionToken(user);
     res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
     res.json({ user: { id: user.id, email: user.email, fullName: user.fullName } });
@@ -54,6 +58,21 @@ app.get("/me", authMiddleware, async (req: AuthedRequest, res) => {
   res.json({ user: { id: req.user!.id, email: req.user!.email, fullName: req.user!.fullName } });
 });
 
+app.get("/patients/:patientId/results", authMiddleware, async (req: AuthedRequest, res) => {
+  const { patientId } = req.params;
+  const patient = await prisma.patient.findFirst({
+    where: { id: patientId, ownerUserId: req.user!.id },
+  });
+  if (!patient) return res.status(404).json({ error: "Patient not found" });
+
+  const results = await prisma.result.findMany({
+    where: { patientId },
+    orderBy: [{ reportedDatetimeLocal: "desc" }, { createdAtUtc: "desc" }],
+    take: 100,
+  });
+  res.json({ results });
+});
+
 app.get("/patients", authMiddleware, async (req: AuthedRequest, res) => {
   const patients = await prisma.patient.findMany({
     where: { ownerUserId: req.user!.id },
@@ -67,12 +86,14 @@ app.post("/patients", authMiddleware, async (req: AuthedRequest, res) => {
   if (!fullName) {
     return res.status(400).json({ error: "fullName is required" });
   }
+  const family = await ensureFamilyAccountForUser(req.user!);
   const patient = await prisma.patient.create({
     data: {
       fullName,
       dob: dob ? new Date(dob) : null,
       sex: sex ?? null,
       ownerUserId: req.user!.id,
+      familyAccountId: family.id,
     },
   });
   res.status(201).json({ patient });
@@ -151,6 +172,19 @@ app.post(
   },
 );
 
+app.post("/reports/:reportId/parsed", authMiddleware, async (req: AuthedRequest, res) => {
+  try {
+    await ingestParsedReport({ reportId: req.params.reportId, userId: req.user!.id, payload: req.body });
+    res.json({ status: "ingested" });
+  } catch (err) {
+    if (err instanceof UserInputError) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    logger.error({ err }, "Ingest failed");
+    res.status(500).json({ error: "Failed to ingest parsed payload" });
+  }
+});
+
 app.get("/reports/:reportId", authMiddleware, async (req: AuthedRequest, res) => {
   const reportId = req.params.reportId;
   const report = await prisma.report.findFirst({
@@ -161,6 +195,81 @@ app.get("/reports/:reportId", authMiddleware, async (req: AuthedRequest, res) =>
     return res.status(404).json({ error: "Report not found" });
   }
   res.json({ report });
+});
+
+app.post("/mapping-dictionary", authMiddleware, async (req: AuthedRequest, res) => {
+  const { analyte_name_pattern, analyte_short_code, analyte_code_standard_system, analyte_code_standard_value, preferred_unit_normalised } =
+    req.body || {};
+  if (!analyte_name_pattern || !analyte_short_code) {
+    return res.status(400).json({ error: "analyte_name_pattern and analyte_short_code are required" });
+  }
+  const family = await ensureFamilyAccountForUser(req.user!);
+  const entry = await prisma.mappingDictionary.upsert({
+    where: {
+      familyAccountId_analyteNamePattern: {
+        familyAccountId: family.id,
+        analyteNamePattern: analyte_name_pattern,
+      },
+    },
+    update: {
+      analyteShortCode: analyte_short_code,
+      analyteCodeStandardSystem: analyte_code_standard_system ?? "custom",
+      analyteCodeStandardValue: analyte_code_standard_value ?? null,
+      preferredUnitNormalised: preferred_unit_normalised ?? null,
+      updatedAtUtc: new Date(),
+    },
+    create: {
+      familyAccountId: family.id,
+      analyteNamePattern: analyte_name_pattern,
+      analyteShortCode: analyte_short_code,
+      analyteCodeStandardSystem: analyte_code_standard_system ?? "custom",
+      analyteCodeStandardValue: analyte_code_standard_value ?? null,
+      preferredUnitNormalised: preferred_unit_normalised ?? null,
+      enabled: true,
+      createdByUserId: req.user!.id,
+    },
+  });
+  res.status(201).json({ entry });
+});
+
+app.patch("/results/:resultId/confirm-mapping", authMiddleware, async (req: AuthedRequest, res) => {
+  const { resultId } = req.params;
+  const { analyte_short_code } = req.body || {};
+  if (!analyte_short_code) return res.status(400).json({ error: "analyte_short_code required" });
+  const result = await prisma.result.findFirst({
+    where: { id: resultId, patient: { ownerUserId: req.user!.id } },
+    include: { patient: true },
+  });
+  if (!result) return res.status(404).json({ error: "Result not found" });
+  const family = await ensureFamilyAccountForUser(req.user!);
+  const mapping = await prisma.mappingDictionary.upsert({
+    where: {
+      familyAccountId_analyteNamePattern: {
+        familyAccountId: family.id,
+        analyteNamePattern: result.analyteNameOriginal,
+      },
+    },
+    update: { analyteShortCode: analyte_short_code },
+    create: {
+      familyAccountId: family.id,
+      analyteNamePattern: result.analyteNameOriginal,
+      analyteShortCode: analyte_short_code,
+      analyteCodeStandardSystem: "custom",
+      createdByUserId: req.user!.id,
+    },
+  });
+
+  const updated = await prisma.result.update({
+    where: { id: result.id },
+    data: {
+      analyteShortCode: analyte_short_code,
+      mappingMethod: "user_confirmed",
+      mappingConfidence: "high",
+      mappingDictionaryId: mapping.id,
+    },
+  });
+
+  res.json({ result: updated, mapping });
 });
 
 app.get("/reports/needs-review", authMiddleware, async (req: AuthedRequest, res) => {
