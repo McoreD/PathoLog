@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
+import { Line } from "react-chartjs-2";
+import { Chart, LineElement, PointElement, LinearScale, TimeScale, CategoryScale, Tooltip, Legend } from "chart.js";
 import "./App.css";
 
+Chart.register(LineElement, PointElement, LinearScale, TimeScale, CategoryScale, Tooltip, Legend);
 type User = { id: string; email: string; fullName?: string | null };
 type Patient = { id: string; fullName: string };
 type Report = {
@@ -20,6 +23,19 @@ type ResultRow = {
   unitOriginal?: string | null;
   reportedDatetimeLocal?: string | null;
   resultType: string;
+};
+type TrendPoint = {
+  id: string;
+  reportedDatetimeLocal: string | null;
+  collectedDatetimeLocal: string | null;
+  valueNumeric: number | null;
+  valueText: string | null;
+  unitOriginal: string | null;
+  unitNormalised: string | null;
+  flagSeverity: string | null;
+  extractionConfidence: string | null;
+  refLow: number | null;
+  refHigh: number | null;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
@@ -45,6 +61,39 @@ function formatDate(input: string | Date) {
   return date.toLocaleString();
 }
 
+function TrendChart({ points, analyte }: { points: TrendPoint[]; analyte: string }) {
+  const labels = points.map((p) => p.reportedDatetimeLocal || p.collectedDatetimeLocal || "");
+  const data = {
+    labels,
+    datasets: [
+      {
+        label: analyte || "Value",
+        data: points.map((p) => p.valueNumeric ?? null),
+        borderColor: "#0f766e",
+        backgroundColor: "rgba(15,118,110,0.2)",
+        tension: 0.2,
+        spanGaps: true,
+      },
+      {
+        label: "Ref Low",
+        data: points.map((p) => p.refLow ?? null),
+        borderColor: "#d97706",
+        borderDash: [6, 6],
+        pointRadius: 0,
+        spanGaps: true,
+      },
+      {
+        label: "Ref High",
+        data: points.map((p) => p.refHigh ?? null),
+        borderColor: "#d97706",
+        borderDash: [6, 6],
+        pointRadius: 0,
+        spanGaps: true,
+      },
+    ],
+  };
+  return <Line data={data} />;
+}
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -56,6 +105,8 @@ export default function App() {
   const [mappingForm, setMappingForm] = useState({ pattern: "", shortCode: "" });
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [trendCode, setTrendCode] = useState("");
+  const [trendData, setTrendData] = useState<TrendPoint[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -205,6 +256,19 @@ export default function App() {
       }
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to save mapping");
+    }
+  };
+
+  const loadTrend = async (analyteShortCode: string) => {
+    if (!selectedPatientId || !analyteShortCode) return;
+    try {
+      const data = await fetchJSON<{ series: TrendPoint[] }>(
+        `/patients/${selectedPatientId}/trend?analyte_short_code=${encodeURIComponent(analyteShortCode)}`,
+      );
+      setTrendData(data.series);
+      setTrendCode(analyteShortCode);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to load trend");
     }
   };
 
@@ -426,6 +490,27 @@ export default function App() {
                 </tbody>
               </table>
             )}
+          </section>
+
+          <section className="card">
+            <h2>Trend</h2>
+            <div className="stack">
+              <label>
+                Analyte short code
+                <input
+                  type="text"
+                  value={trendCode}
+                  onChange={(e) => setTrendCode(e.target.value.toUpperCase())}
+                  onBlur={(e) => loadTrend(e.target.value)}
+                  placeholder="e.g. TSH"
+                />
+              </label>
+              {trendData.length ? (
+                <TrendChart points={trendData} analyte={trendCode} />
+              ) : (
+                <p className="muted">Enter a short code to view trend.</p>
+              )}
+            </div>
           </section>
 
           <section className="card">

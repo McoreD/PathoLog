@@ -1,0 +1,25 @@
+# Human Deployment/Setup Checklist
+
+- [ ] Create Azure App Service (Node) for the backend API.
+  - Runtime: Node 20.x; Start command: `node dist/server.js`.
+  - CORS: allow `https://gentle-desert-0814a2000.2.azurestaticapps.net` (and your custom domain when ready).
+- [ ] App Service configuration (Application settings):
+  - `DATABASE_URL` = your Neon connection string (sslmode=require&channel_binding=require)
+  - `AUTH_SECRET` = long random secret
+  - `GOOGLE_CLIENT_ID` = Google OAuth Web client ID
+  - `FRONTEND_ORIGIN` = `https://gentle-desert-0814a2000.2.azurestaticapps.net` (add custom domain later)
+  - `STORAGE_PROVIDER` = `local` (note: not durable across redeploy/scale; switch to Azure Blob later)
+- [ ] Run migrations against Neon once: `cd backend && npx prisma migrate deploy` (with `DATABASE_URL` set).
+- [ ] SWA settings:
+  - `VITE_API_BASE_URL` = `https://<your-app-service>.azurewebsites.net` (or API custom domain)
+  - `VITE_GOOGLE_CLIENT_ID` = same Google client ID
+- [ ] GitHub secrets:
+  - `AZURE_STATIC_WEB_APPS_API_TOKEN_<...>` for SWA
+  - `AZURE_WEBAPP_PUBLISH_PROFILE` for App Service
+- [ ] Deploy pipeline:
+  - SWA build/upload (frontend) using the SWA token.
+  - Backend build/deploy to App Service using publish profile.
+- [ ] Google OAuth client:
+  - Authorized JavaScript origins: `https://gentle-desert-0814a2000.2.azurestaticapps.net`, `http://localhost:5173`, `https://patholog.delpach.com` (when ready).
+  - Redirect URIs not needed for the current GIS flow.
+- [ ] Custom domain (optional): add to SWA; update `FRONTEND_ORIGIN` and CORS in App Service accordingly; add the domain to Google OAuth origins.

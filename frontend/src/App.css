@@ -151,3 +151,7 @@ th {
 td input[type="text"] {
   width: 120px;
 }
+
+.chart-container {
+  width: 100%;
+}
