@@ -1,0 +1,14 @@
+{
+  "name": "patholog",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PathoLog web app for structured pathology report ingestion and trending",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "lint": "echo \"Add lint scripts in individual packages\"",
+    "dev": "echo \"Run backend and frontend dev servers from their packages\""
+  }
+}

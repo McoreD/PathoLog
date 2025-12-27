@@ -1,0 +1,26 @@
+# Node and build artifacts
+node_modules/
+*.log
+dist/
+.turbo/
+.cache/
+
+# Environment and credentials
+.env
+.env.*
+
+# Local data and uploads
+storage/
+tmp/
+
+# Prisma
+prisma/*.db
+prisma/migrations/*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
