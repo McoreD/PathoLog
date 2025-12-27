@@ -38,6 +38,7 @@ type TrendPoint = {
   refHigh: number | null;
 };
 type Anomaly = { analyte_short_code: string; type: string; detail?: any };
+type AiSettings = { provider: string; hasKey: boolean };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 const authReturnUrl = typeof window === "undefined" ? "/" : window.location.href;
@@ -147,6 +148,9 @@ export default function App() {
   const [trendCode, setTrendCode] = useState("");
   const [trendData, setTrendData] = useState<TrendPoint[]>([]);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
+  const [aiKey, setAiKey] = useState("");
+  const [savingAi, setSavingAi] = useState(false);
 
   const filteredResults = results.filter((r) => {
     if (!filter.trim()) return true;
@@ -162,6 +166,7 @@ export default function App() {
       const authUser = await loadAuthUser();
       if (authUser) {
         setUser(authUser);
+        await loadAiSettings();
         await Promise.all([loadPatients(), loadNeedsReview()]);
       }
     })();
@@ -196,6 +201,15 @@ export default function App() {
   const loadNeedsReview = async () => {
     const data = await fetchJSON<{ reports: ReviewReport[] }>("/reports/needs-review");
     setNeedsReview(data.reports);
+  };
+
+  const loadAiSettings = async () => {
+    try {
+      const data = await fetchJSON<AiSettings>("/ai/settings");
+      setAiSettings(data);
+    } catch (err) {
+      recordError("Load AI settings", err, "Failed to load AI settings");
+    }
   };
 
   const loadReports = async (patientId: string) => {
@@ -290,6 +304,26 @@ export default function App() {
 
   const logout = async () => {
     window.location.href = logoutUrl;
+  };
+
+  const saveAiKey = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingAi(true);
+    try {
+      const payload = { apiKey: aiKey.trim() };
+      const data = await fetchJSON<AiSettings>("/ai/settings", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setAiSettings(data);
+      setAiKey("");
+      setStatus("AI key saved");
+      setDebugError(null);
+    } catch (err) {
+      recordError("Save AI key", err, "Failed to save AI key");
+    } finally {
+      setSavingAi(false);
+    }
   };
 
   const saveShortCode = async (resultId: string, code: string) => {
@@ -688,6 +722,25 @@ export default function App() {
                 />
               </label>
               <button type="submit">Save mapping</button>
+            </form>
+          </section>
+
+          <section className="card">
+            <h2>AI settings</h2>
+            <form className="stack" onSubmit={saveAiKey}>
+              <label>
+                OpenAI API key
+                <input
+                  type="password"
+                  value={aiKey}
+                  onChange={(e) => setAiKey(e.target.value)}
+                  placeholder={aiSettings?.hasKey ? "Key saved (enter to replace)" : "sk-..."}
+                />
+              </label>
+              <button type="submit" disabled={savingAi}>
+                {aiSettings?.hasKey ? "Update key" : "Save key"}
+              </button>
+              {aiSettings?.hasKey ? <div className="muted small">Key is stored securely on the server.</div> : null}
             </form>
           </section>
         </>

@@ -10,6 +10,8 @@
   - Configure Microsoft (AAD) provider in the Static Web App Authentication settings.
   - Configure Google provider in the Static Web App Authentication settings.
   - Sign-in uses `/.auth/login/aad`, `/.auth/login/google`, and `/.auth/me`.
+- [ ] AI (optional):
+  - Enter OpenAI API key in the in-app AI settings to enable PDF parsing and short code lookup.
 - [ ] GitHub secrets:
   - `AZURE_STATIC_WEB_APPS_API_TOKEN_<...>` for SWA
 - [ ] Deploy pipeline:

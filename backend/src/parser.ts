@@ -2,6 +2,8 @@ import pdfParse from "pdf-parse";
 import { prisma } from "./db.js";
 import { createStorage } from "./storage.js";
 import { logger } from "./logger.js";
+import { extractParsedPayload } from "./ai/aiService.js";
+import { ingestParsedReport } from "./ingest.js";
 
 const storage = createStorage();
 
@@ -28,7 +30,7 @@ async function ocrFallback(_buffer: Buffer): Promise<ParseResult | null> {
   return { rawText: "", method: "ocr_fallback", confidence: "low" };
 }
 
-export async function parseReport(reportId: string) {
+export async function parseReport(reportId: string, userId: string) {
   const report = await prisma.report.findUnique({
     where: { id: reportId },
     include: { sourceFile: true },
@@ -49,10 +51,15 @@ export async function parseReport(reportId: string) {
         data: {
           rawText: parsed.rawText,
           rawTextExtractionMethod: parsed.method === "pdf_text" ? "pdf_text" : "ocr_mixed",
-          parsingStatus: "completed",
+          parsingStatus: "needs_review",
           extractionConfidenceOverall: parsed.confidence,
         },
       });
+
+      const aiPayload = await extractParsedPayload(userId, parsed.rawText);
+      if (aiPayload) {
+        await ingestParsedReport({ reportId: report.id, userId, payload: aiPayload });
+      }
     } else {
       await prisma.report.update({
         where: { id: report.id },

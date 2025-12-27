@@ -2,6 +2,7 @@ import { ParsedResult } from "./schemas/parsedPayload.js";
 import { MappingDictionary, Patient, ResultType, MappingMethod, MappingConfidence } from "@prisma/client";
 import { prisma } from "./db.js";
 import { ensureFamilyAccountForUser } from "./family.js";
+import { suggestShortCodes } from "./ai/aiService.js";
 import { UserInputError } from "./utils/errors.js";
 import crypto from "crypto";
 
@@ -62,6 +63,12 @@ export async function normalizeResults(args: {
     where: { familyAccountId: family.id, enabled: true },
   });
 
+  const missingNames = results
+    .filter((r) => !r.analyte_short_code)
+    .map((r) => r.analyte_name_original)
+    .filter(Boolean);
+  const aiShortCodes = await suggestShortCodes(userId, missingNames);
+
   return results.map((r) => {
     const dictMatch = matchDictionaryEntry(r.analyte_name_original, dictionary);
     const unitNormalised = r.unit_normalised ?? normalizeUnit(r.unit_original);
@@ -76,7 +83,14 @@ export async function normalizeResults(args: {
       mappingConfidence = "high";
       mappingDictionaryId = dictMatch.id;
     } else if (!analyteShortCode) {
-      analyteShortCode = generateShortCode(r.analyte_name_original);
+      const aiShortCode = aiShortCodes.get(r.analyte_name_original.toLowerCase());
+      if (aiShortCode) {
+        analyteShortCode = aiShortCode;
+        mappingMethod = "generated";
+        mappingConfidence = "medium";
+      } else {
+        analyteShortCode = generateShortCode(r.analyte_name_original);
+      }
     } else {
       mappingMethod = "user_confirmed";
       mappingConfidence = "high";

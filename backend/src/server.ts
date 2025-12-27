@@ -356,11 +356,36 @@ app.post(
     });
 
     // Kick off async parsing without blocking the upload response.
-    setImmediate(() => parseReport(report.id).catch((err) => logger.error({ err, reportId: report.id }, "Parse job failed")));
+    setImmediate(() =>
+      parseReport(report.id, req.user!.id).catch((err) => logger.error({ err, reportId: report.id }, "Parse job failed")),
+    );
 
     res.status(201).json({ report, sourceFile });
   },
 );
+
+app.get("/ai/settings", authMiddleware, async (req: AuthedRequest, res) => {
+  const setting = await prisma.userAiSetting.findUnique({
+    where: { userId_provider: { userId: req.user!.id, provider: "openai" } },
+  });
+  res.json({ provider: "openai", hasKey: Boolean(setting?.apiKey) });
+});
+
+app.post("/ai/settings", authMiddleware, async (req: AuthedRequest, res) => {
+  const apiKey = (req.body?.apiKey ?? "").trim();
+  if (!apiKey) {
+    await prisma.userAiSetting.deleteMany({
+      where: { userId: req.user!.id, provider: "openai" },
+    });
+    return res.json({ provider: "openai", hasKey: false });
+  }
+  const setting = await prisma.userAiSetting.upsert({
+    where: { userId_provider: { userId: req.user!.id, provider: "openai" } },
+    update: { apiKey },
+    create: { userId: req.user!.id, provider: "openai", apiKey },
+  });
+  res.json({ provider: setting.provider, hasKey: true });
+});
 
 app.post("/reports/:reportId/parsed", authMiddleware, async (req: AuthedRequest, res) => {
   try {

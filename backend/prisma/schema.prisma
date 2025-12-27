@@ -139,6 +139,18 @@ model User {
   reviewTasks    ReviewTask[]    @relation("TaskResolver")
   confirmedResults Result[]      @relation("ResultMappingConfirmed")
   auditLogs      AuditLog[]
+  aiSettings     UserAiSetting[]
+}
+
+model UserAiSetting {
+  id           String   @id @default(uuid())
+  userId       String
+  provider     String
+  apiKey       String
+  createdAtUtc DateTime @default(now())
+  updatedAtUtc DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id])
+  @@unique([userId, provider])
 }
 
 model FamilyAccount {
