@@ -431,10 +431,16 @@ export default function App() {
         <section className="card">
           <h2>Sign in with Google</h2>
           <GoogleLogin onSuccess={handleGoogle} onError={() => setStatus("Google login failed")} useOneTap />
-          {isMicrosoftConfigured ? (
-            <button type="button" className="ghost" onClick={() => handleMicrosoftLogin("login")} disabled={busy}>
-              Sign in with Microsoft
-            </button>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => handleMicrosoftLogin("login")}
+            disabled={busy || !isMicrosoftConfigured}
+          >
+            Sign in with Microsoft
+          </button>
+          {!isMicrosoftConfigured ? (
+            <p className="muted small">Microsoft sign-in needs VITE_MICROSOFT_CLIENT_ID and VITE_MICROSOFT_TENANT_ID.</p>
           ) : null}
           {status ? <p className="status">{status}</p> : null}
         </section>
@@ -447,10 +453,18 @@ export default function App() {
                 {!user.googleLinked ? (
                   <GoogleLogin onSuccess={handleGoogleLink} onError={() => setStatus("Google link failed")} />
                 ) : null}
-                {!user.microsoftLinked && isMicrosoftConfigured ? (
-                  <button type="button" className="ghost" onClick={() => handleMicrosoftLogin("link")} disabled={busy}>
+                {!user.microsoftLinked ? (
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => handleMicrosoftLogin("link")}
+                    disabled={busy || !isMicrosoftConfigured}
+                  >
                     Link Microsoft account
                   </button>
+                ) : null}
+                {!user.microsoftLinked && !isMicrosoftConfigured ? (
+                  <p className="muted small">Set Microsoft env vars to enable linking.</p>
                 ) : null}
               </div>
             </section>
