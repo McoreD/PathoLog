@@ -15,6 +15,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.694.0",
     "@aws-sdk/s3-request-presigner": "^3.694.0",
+    "azure-function-express": "^1.4.0",
     "applicationinsights": "^2.9.6",
     "@prisma/client": "^5.14.0",
     "cookie-parser": "^1.4.6",

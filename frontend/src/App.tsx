@@ -39,9 +39,10 @@ type TrendPoint = {
 };
 type Anomaly = { analyte_short_code: string; type: string; detail?: any };
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 const authReturnUrl = typeof window === "undefined" ? "/" : window.location.href;
-const loginUrl = `/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(authReturnUrl)}`;
+const loginMicrosoftUrl = `/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(authReturnUrl)}`;
+const loginGoogleUrl = `/.auth/login/google?post_login_redirect_uri=${encodeURIComponent(authReturnUrl)}`;
 const logoutUrl = `/.auth/logout?post_logout_redirect_uri=${encodeURIComponent(authReturnUrl)}`;
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
@@ -374,10 +375,15 @@ export default function App() {
 
       {!user ? (
         <section className="card">
-          <h2>Sign in with Microsoft</h2>
-          <a className="ghost" href={loginUrl}>
-            Sign in with Microsoft
-          </a>
+          <h2>Sign in</h2>
+          <div className="stack">
+            <a className="ghost" href={loginMicrosoftUrl}>
+              Sign in with Microsoft
+            </a>
+            <a className="ghost" href={loginGoogleUrl}>
+              Sign in with Google
+            </a>
+          </div>
           {status ? <p className="status">{status}</p> : null}
         </section>
       ) : (

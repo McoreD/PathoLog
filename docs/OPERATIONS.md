@@ -1,8 +1,8 @@
 # Operations, Monitoring, and Security
 
 ## Observability
-- App Insights (optional): set `APPINSIGHTS_CONNECTION_STRING` in App Service; backend auto-starts Application Insights SDK for requests/logs/metrics.
-- Logs: Pino to stdout; collect via App Service log streaming or App Insights if enabled.
+- App Insights (optional): set `APPINSIGHTS_CONNECTION_STRING` in SWA settings; backend auto-starts Application Insights SDK for requests/logs/metrics.
+- Logs: Pino to stdout; collect via Function logs or App Insights if enabled.
 - Health: `GET /health`.
 - Rate limiting: 300 requests / 15 minutes per IP (config in `backend/src/server.ts`).
 
@@ -21,18 +21,16 @@
 - Migrations: applied via `npx prisma db execute` (raw SQL) or future Prisma migrations; ensure CI applies before deploy.
 
 ## Security
-- Secrets in App Service/SWA settings; never commit.
-- CORS: allow only SWA/custom domains on the API.
-- Auth: Google sign-in; session cookie HTTP-only, sameSite=lax.
+- Secrets in SWA settings; never commit.
+- Auth: SWA built-in Microsoft/Google sign-in via `/.auth/*`.
 - Access control: patient/report access tied to owner or family membership; audit logs on mapping confirmations and corrections.
 - PDFs: prefer signed URL delivery via Blob; fallback streams only when local storage is used.
 
 ## Restore Procedures (outline)
 - DB restore: create new Neon branch from PITR time, swap `DATABASE_URL` to new branch, run migrations if needed.
 - Storage restore: rely on Blob versioning/soft-delete if enabled; otherwise redeploy from backups.
-- Config restore: export App Service and SWA configuration (JSON) after changes; keep infra as code where possible.
+- Config restore: export SWA configuration (JSON) after changes; keep infra as code where possible.
 
 ## Deployment Notes
-- SWA: set `VITE_API_BASE_URL`, `VITE_GOOGLE_CLIENT_ID`.
-- API (App Service): set `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `FRONTEND_ORIGIN`, storage vars, optional `APPINSIGHTS_CONNECTION_STRING`.
-- Build commands: backend `npm ci && npm run build`; start `node dist/server.js`. Frontend built by SWA action.
+- SWA: set `DATABASE_URL`, storage vars, optional `APPINSIGHTS_CONNECTION_STRING`.
+- Build commands: backend `npm ci && npm run build`; frontend built by SWA action.

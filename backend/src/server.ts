@@ -1,10 +1,9 @@
 import express from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
 import multer from "multer";
 import crypto from "crypto";
 import { env } from "./env.js";
-import { authMiddleware, createSessionToken, sessionCookieOptions, verifyGoogleCredential, verifyMicrosoftCredential, AuthedRequest, SESSION_COOKIE } from "./auth.js";
+import { authMiddleware, AuthedRequest } from "./auth.js";
 import { logger } from "./logger.js";
 import { createStorage } from "./storage.js";
 import { v4 as uuidv4 } from "uuid";
@@ -13,7 +12,7 @@ import { parseReport } from "./parser.js";
 import { ensureFamilyAccountForUser } from "./family.js";
 import { ingestParsedReport } from "./ingest.js";
 import { UserInputError } from "./utils/errors.js";
-import { assertPatientAccess, assertReportAccess, ensureFamilyMembership } from "./access.js";
+import { assertPatientAccess, assertReportAccess } from "./access.js";
 import { logAudit } from "./audit.js";
 import rateLimit from "express-rate-limit";
 import { createSignedUrl, isSignedUrlSupported } from "./storage.js";
@@ -27,10 +26,19 @@ if (env.APPINSIGHTS_CONNECTION_STRING) {
   logger.info("Application Insights enabled");
 }
 
-const app = express();
-app.use(cors({ origin: env.FRONTEND_ORIGIN, credentials: true }));
+export const app = express();
+app.use((req, _res, next) => {
+  if (req.url.startsWith("/api/")) {
+    req.url = req.url.slice(4) || "/";
+  }
+  next();
+});
+if (env.FRONTEND_ORIGIN) {
+  app.use(cors({ origin: env.FRONTEND_ORIGIN, credentials: true }));
+} else {
+  app.use(cors());
+}
 app.use(express.json({ limit: "5mb" }));
-app.use(cookieParser());
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -40,13 +48,11 @@ app.use(
   }),
 );
 
-function toUserResponse(user: { id: string; email: string; fullName: string | null; googleSub: string | null; microsoftSub: string | null }) {
+function toUserResponse(user: { id: string; email: string; fullName: string | null }) {
   return {
     id: user.id,
     email: user.email,
     fullName: user.fullName,
-    googleLinked: Boolean(user.googleSub),
-    microsoftLinked: Boolean(user.microsoftSub),
   };
 }
 
@@ -71,117 +77,6 @@ function toCsvRow(fields: (string | number | null | undefined)[]) {
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-app.post("/auth/google", async (req, res) => {
-  try {
-    const credential = req.body?.credential;
-    if (!credential) {
-      return res.status(400).json({ error: "Missing credential" });
-    }
-    const { email, sub, fullName } = await verifyGoogleCredential(credential);
-
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { googleSub: sub, fullName },
-      create: { email, googleSub: sub, fullName },
-    });
-    await ensureFamilyAccountForUser(user);
-    await ensureFamilyMembership(user);
-    const token = await createSessionToken(user);
-    res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
-    res.json({ user: toUserResponse(user) });
-  } catch (err) {
-    logger.error({ err }, "Google auth failed");
-    res.status(401).json({ error: "Authentication failed" });
-  }
-});
-
-app.post("/auth/google/link", authMiddleware, async (req: AuthedRequest, res) => {
-  try {
-    const credential = req.body?.credential;
-    if (!credential) {
-      return res.status(400).json({ error: "Missing credential" });
-    }
-    const { sub, fullName } = await verifyGoogleCredential(credential);
-
-    const conflict = await prisma.user.findFirst({
-      where: { googleSub: sub, id: { not: req.user!.id } },
-    });
-    if (conflict) {
-      return res.status(409).json({ error: "Google account is already linked to another user" });
-    }
-
-    const user = await prisma.user.update({
-      where: { id: req.user!.id },
-      data: {
-        googleSub: sub,
-        fullName: req.user!.fullName || fullName,
-      },
-    });
-    res.json({ user: toUserResponse(user) });
-  } catch (err) {
-    logger.error({ err }, "Google link failed");
-    res.status(401).json({ error: "Authentication failed" });
-  }
-});
-
-app.post("/auth/microsoft", async (req, res) => {
-  try {
-    const credential = req.body?.credential;
-    if (!credential) {
-      return res.status(400).json({ error: "Missing credential" });
-    }
-    const { email, sub, fullName } = await verifyMicrosoftCredential(credential);
-
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { microsoftSub: sub, fullName },
-      create: { email, microsoftSub: sub, fullName },
-    });
-    await ensureFamilyAccountForUser(user);
-    await ensureFamilyMembership(user);
-    const token = await createSessionToken(user);
-    res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
-    res.json({ user: toUserResponse(user) });
-  } catch (err) {
-    logger.error({ err }, "Microsoft auth failed");
-    res.status(401).json({ error: "Authentication failed" });
-  }
-});
-
-app.post("/auth/microsoft/link", authMiddleware, async (req: AuthedRequest, res) => {
-  try {
-    const credential = req.body?.credential;
-    if (!credential) {
-      return res.status(400).json({ error: "Missing credential" });
-    }
-    const { sub, fullName } = await verifyMicrosoftCredential(credential);
-
-    const conflict = await prisma.user.findFirst({
-      where: { microsoftSub: sub, id: { not: req.user!.id } },
-    });
-    if (conflict) {
-      return res.status(409).json({ error: "Microsoft account is already linked to another user" });
-    }
-
-    const user = await prisma.user.update({
-      where: { id: req.user!.id },
-      data: {
-        microsoftSub: sub,
-        fullName: req.user!.fullName || fullName,
-      },
-    });
-    res.json({ user: toUserResponse(user) });
-  } catch (err) {
-    logger.error({ err }, "Microsoft link failed");
-    res.status(401).json({ error: "Authentication failed" });
-  }
-});
-
-app.post("/auth/logout", (_req, res) => {
-  res.clearCookie(SESSION_COOKIE, sessionCookieOptions());
-  res.json({ success: true });
 });
 
 app.get("/me", authMiddleware, async (req: AuthedRequest, res) => {
@@ -752,7 +647,9 @@ app.get("/reports/needs-review", authMiddleware, async (req: AuthedRequest, res)
   res.json({ reports });
 });
 
-const port = Number(process.env.PORT || env.API_PORT || 4000);
-app.listen(port, () => {
-  logger.info(`API listening on http://localhost:${port}`);
-});
+if (process.env.PATHOLOG_LISTEN !== "false") {
+  const port = Number(process.env.PORT || env.API_PORT || 4000);
+  app.listen(port, () => {
+    logger.info(`API listening on http://localhost:${port}`);
+  });
+}
