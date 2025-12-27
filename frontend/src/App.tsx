@@ -56,7 +56,8 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || res.statusText);
+    const message = text || res.statusText || "Request failed";
+    throw new Error(`${res.status} ${message}`);
   }
   return res.json() as Promise<T>;
 }
@@ -141,6 +142,7 @@ export default function App() {
   const [mappingForm, setMappingForm] = useState({ pattern: "", shortCode: "" });
   const [status, setStatus] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
+  const [debugError, setDebugError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [trendCode, setTrendCode] = useState("");
   const [trendData, setTrendData] = useState<TrendPoint[]>([]);
@@ -233,9 +235,10 @@ export default function App() {
       await loadPatients();
       await loadNeedsReview();
       setDebugInfo("Create patient succeeded");
+      setDebugError(null);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Could not create patient");
-      setDebugInfo(err instanceof Error ? err.message : "Create patient failed");
+      setDebugError(err instanceof Error ? err.message : "Create patient failed");
     } finally {
       setBusy(false);
     }
@@ -428,6 +431,7 @@ export default function App() {
                   Add patient
                 </button>
                 {debugInfo ? <div className="muted small">Debug: {debugInfo}</div> : null}
+                {debugError ? <div className="status">Error: {debugError}</div> : null}
               </form>
 
               <div className="list">
