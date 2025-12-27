@@ -22,6 +22,12 @@ app.use(cors({ origin: env.FRONTEND_ORIGIN, credentials: true }));
 app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
 
+function parseDate(value?: string) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
@@ -60,15 +66,88 @@ app.get("/me", authMiddleware, async (req: AuthedRequest, res) => {
 
 app.get("/patients/:patientId/results", authMiddleware, async (req: AuthedRequest, res) => {
   const { patientId } = req.params;
+  const { analyte_short_code, from, to } = req.query as Record<string, string | undefined>;
+  const patient = await prisma.patient.findFirst({
+    where: { id: patientId, ownerUserId: req.user!.id },
+  });
+  if (!patient) return res.status(404).json({ error: "Patient not found" });
+
+  const fromDate = parseDate(from);
+  const toDate = parseDate(to);
+
+  const results = await prisma.result.findMany({
+    where: {
+      patientId,
+      analyteShortCode: analyte_short_code ?? undefined,
+      reportedDatetimeLocal: {
+        gte: fromDate ?? undefined,
+        lte: toDate ?? undefined,
+      },
+    },
+    orderBy: [{ reportedDatetimeLocal: "desc" }, { createdAtUtc: "desc" }],
+    take: 100,
+  });
+  res.json({ results });
+});
+
+app.get("/patients/:patientId/trend", authMiddleware, async (req: AuthedRequest, res) => {
+  const { patientId } = req.params;
+  const { analyte_short_code, from, to } = req.query as Record<string, string | undefined>;
+  if (!analyte_short_code) return res.status(400).json({ error: "analyte_short_code is required" });
+  const patient = await prisma.patient.findFirst({
+    where: { id: patientId, ownerUserId: req.user!.id },
+  });
+  if (!patient) return res.status(404).json({ error: "Patient not found" });
+
+  const fromDate = parseDate(from);
+  const toDate = parseDate(to);
+
+  const series = await prisma.result.findMany({
+    where: {
+      patientId,
+      analyteShortCode: analyte_short_code,
+      reportedDatetimeLocal: {
+        gte: fromDate ?? undefined,
+        lte: toDate ?? undefined,
+      },
+    },
+    orderBy: { reportedDatetimeLocal: "asc" },
+    select: {
+      id: true,
+      reportedDatetimeLocal: true,
+      collectedDatetimeLocal: true,
+      valueNumeric: true,
+      valueText: true,
+      unitOriginal: true,
+      unitNormalised: true,
+      flagSeverity: true,
+      extractionConfidence: true,
+      refLow: true,
+      refHigh: true,
+    },
+  });
+
+  res.json({ analyte_short_code, series });
+});
+
+app.get("/patients/:patientId/review/low-confidence", authMiddleware, async (req: AuthedRequest, res) => {
+  const { patientId } = req.params;
   const patient = await prisma.patient.findFirst({
     where: { id: patientId, ownerUserId: req.user!.id },
   });
   if (!patient) return res.status(404).json({ error: "Patient not found" });
 
   const results = await prisma.result.findMany({
-    where: { patientId },
-    orderBy: [{ reportedDatetimeLocal: "desc" }, { createdAtUtc: "desc" }],
-    take: 100,
+    where: {
+      patientId,
+      OR: [
+        { extractionConfidence: "low" },
+        { mappingConfidence: "low" },
+        { analyteShortCode: null },
+      ],
+    },
+    orderBy: { updatedAtUtc: "desc" },
+    take: 50,
   });
   res.json({ results });
 });
@@ -79,6 +158,14 @@ app.get("/patients", authMiddleware, async (req: AuthedRequest, res) => {
     orderBy: { createdAtUtc: "desc" },
   });
   res.json({ patients });
+});
+
+app.get("/patients/:patientId", authMiddleware, async (req: AuthedRequest, res) => {
+  const patient = await prisma.patient.findFirst({
+    where: { id: req.params.patientId, ownerUserId: req.user!.id },
+  });
+  if (!patient) return res.status(404).json({ error: "Patient not found" });
+  res.json({ patient });
 });
 
 app.post("/patients", authMiddleware, async (req: AuthedRequest, res) => {
@@ -97,6 +184,32 @@ app.post("/patients", authMiddleware, async (req: AuthedRequest, res) => {
     },
   });
   res.status(201).json({ patient });
+});
+
+app.patch("/patients/:patientId", authMiddleware, async (req: AuthedRequest, res) => {
+  const patient = await prisma.patient.findFirst({
+    where: { id: req.params.patientId, ownerUserId: req.user!.id },
+  });
+  if (!patient) return res.status(404).json({ error: "Patient not found" });
+  const { fullName, dob, sex } = req.body;
+  const updated = await prisma.patient.update({
+    where: { id: patient.id },
+    data: {
+      fullName: fullName ?? patient.fullName,
+      dob: dob ? new Date(dob) : patient.dob,
+      sex: sex ?? patient.sex,
+    },
+  });
+  res.json({ patient: updated });
+});
+
+app.delete("/patients/:patientId", authMiddleware, async (req: AuthedRequest, res) => {
+  const patient = await prisma.patient.findFirst({
+    where: { id: req.params.patientId, ownerUserId: req.user!.id },
+  });
+  if (!patient) return res.status(404).json({ error: "Patient not found" });
+  await prisma.patient.delete({ where: { id: patient.id } });
+  res.json({ success: true });
 });
 
 app.get("/patients/:patientId/reports", authMiddleware, async (req: AuthedRequest, res) => {
@@ -270,6 +383,34 @@ app.patch("/results/:resultId/confirm-mapping", authMiddleware, async (req: Auth
   });
 
   res.json({ result: updated, mapping });
+});
+
+app.patch("/results/:resultId/correction", authMiddleware, async (req: AuthedRequest, res) => {
+  const { resultId } = req.params;
+  const payload = req.body || {};
+  const result = await prisma.result.findFirst({
+    where: { id: resultId, patient: { ownerUserId: req.user!.id } },
+  });
+  if (!result) return res.status(404).json({ error: "Result not found" });
+
+  const updated = await prisma.result.update({
+    where: { id: result.id },
+    data: {
+      valueNumeric: payload.value_numeric ?? result.valueNumeric,
+      valueText: payload.value_text ?? result.valueText,
+      unitOriginal: payload.unit_original ?? result.unitOriginal,
+      unitNormalised: payload.unit_normalised ?? result.unitNormalised,
+      flagSeverity: payload.flag_severity ?? result.flagSeverity,
+      extractionConfidence: payload.extraction_confidence ?? result.extractionConfidence,
+      refLow: payload.ref_low ?? result.refLow,
+      refHigh: payload.ref_high ?? result.refHigh,
+      refText: payload.ref_text ?? result.refText,
+      referenceRangeContext: payload.reference_range_context ?? result.referenceRangeContext,
+      collectionContext: payload.collection_context ?? result.collectionContext,
+    },
+  });
+
+  res.json({ result: updated });
 });
 
 app.get("/reports/needs-review", authMiddleware, async (req: AuthedRequest, res) => {
