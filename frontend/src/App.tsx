@@ -137,9 +137,10 @@ export default function App() {
   const [results, setResults] = useState<ResultRow[]>([]);
   const [filter, setFilter] = useState("");
   const [preferNormalised, setPreferNormalised] = useState(true);
-  const [patientForm, setPatientForm] = useState({ fullName: "", dob: "", sex: "unknown" });
+  const [patientForm, setPatientForm] = useState({ fullName: "", dob: "", sex: "female" });
   const [mappingForm, setMappingForm] = useState({ pattern: "", shortCode: "" });
   const [status, setStatus] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [trendCode, setTrendCode] = useState("");
   const [trendData, setTrendData] = useState<TrendPoint[]>([]);
@@ -222,16 +223,19 @@ export default function App() {
       return;
     }
     setBusy(true);
+    setDebugInfo(`POST ${API_BASE}/patients`);
     try {
       await fetchJSON<{ patient: Patient }>("/patients", {
         method: "POST",
         body: JSON.stringify(patientForm),
       });
-      setPatientForm({ fullName: "", dob: "", sex: "unknown" });
+      setPatientForm({ fullName: "", dob: "", sex: "female" });
       await loadPatients();
       await loadNeedsReview();
+      setDebugInfo("Create patient succeeded");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Could not create patient");
+      setDebugInfo(err instanceof Error ? err.message : "Create patient failed");
     } finally {
       setBusy(false);
     }
@@ -418,13 +422,12 @@ export default function App() {
                   >
                     <option value="female">Female</option>
                     <option value="male">Male</option>
-                    <option value="other">Other</option>
-                    <option value="unknown">Prefer not to say</option>
                   </select>
                 </label>
                 <button type="submit" disabled={busy}>
                   Add patient
                 </button>
+                {debugInfo ? <div className="muted small">Debug: {debugInfo}</div> : null}
               </form>
 
               <div className="list">
