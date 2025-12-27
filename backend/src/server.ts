@@ -13,6 +13,8 @@ import { parseReport } from "./parser.js";
 import { ensureFamilyAccountForUser } from "./family.js";
 import { ingestParsedReport } from "./ingest.js";
 import { UserInputError } from "./utils/errors.js";
+import { assertPatientAccess, assertReportAccess, ensureFamilyMembership } from "./access.js";
+import { logAudit } from "./audit.js";
 
 const storage = createStorage();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -59,6 +61,7 @@ app.post("/auth/google", async (req, res) => {
       create: { email, googleSub: sub, fullName },
     });
     await ensureFamilyAccountForUser(user);
+    await ensureFamilyMembership(user);
     const token = await createSessionToken(user);
     res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
     res.json({ user: { id: user.id, email: user.email, fullName: user.fullName } });
@@ -80,10 +83,11 @@ app.get("/me", authMiddleware, async (req: AuthedRequest, res) => {
 app.get("/patients/:patientId/results", authMiddleware, async (req: AuthedRequest, res) => {
   const { patientId } = req.params;
   const { analyte_short_code, from, to } = req.query as Record<string, string | undefined>;
-  const patient = await prisma.patient.findFirst({
-    where: { id: patientId, ownerUserId: req.user!.id },
-  });
-  if (!patient) return res.status(404).json({ error: "Patient not found" });
+  try {
+    await assertPatientAccess(req.user!, patientId);
+  } catch {
+    return res.status(404).json({ error: "Patient not found" });
+  }
 
   const fromDate = parseDate(from);
   const toDate = parseDate(to);
@@ -107,10 +111,11 @@ app.get("/patients/:patientId/trend", authMiddleware, async (req: AuthedRequest,
   const { patientId } = req.params;
   const { analyte_short_code, from, to } = req.query as Record<string, string | undefined>;
   if (!analyte_short_code) return res.status(400).json({ error: "analyte_short_code is required" });
-  const patient = await prisma.patient.findFirst({
-    where: { id: patientId, ownerUserId: req.user!.id },
-  });
-  if (!patient) return res.status(404).json({ error: "Patient not found" });
+  try {
+    await assertPatientAccess(req.user!, patientId);
+  } catch {
+    return res.status(404).json({ error: "Patient not found" });
+  }
 
   const fromDate = parseDate(from);
   const toDate = parseDate(to);
@@ -145,10 +150,11 @@ app.get("/patients/:patientId/trend", authMiddleware, async (req: AuthedRequest,
 
 app.get("/patients/:patientId/review/low-confidence", authMiddleware, async (req: AuthedRequest, res) => {
   const { patientId } = req.params;
-  const patient = await prisma.patient.findFirst({
-    where: { id: patientId, ownerUserId: req.user!.id },
-  });
-  if (!patient) return res.status(404).json({ error: "Patient not found" });
+  try {
+    await assertPatientAccess(req.user!, patientId);
+  } catch {
+    return res.status(404).json({ error: "Patient not found" });
+  }
 
   const results = await prisma.result.findMany({
     where: {
@@ -165,20 +171,68 @@ app.get("/patients/:patientId/review/low-confidence", authMiddleware, async (req
   res.json({ results });
 });
 
+app.get("/patients/:patientId/integrity/anomalies", authMiddleware, async (req: AuthedRequest, res) => {
+  const { patientId } = req.params;
+  try {
+    await assertPatientAccess(req.user!, patientId);
+  } catch {
+    return res.status(404).json({ error: "Patient not found" });
+  }
+  const results = await prisma.result.findMany({
+    where: { patientId },
+    orderBy: { reportedDatetimeLocal: "asc" },
+  });
+  const anomalies: any[] = [];
+  const byCode: Record<string, typeof results> = {};
+  for (const r of results) {
+    const code = r.analyteShortCode || r.analyteNameOriginal;
+    if (!byCode[code]) byCode[code] = [];
+    byCode[code].push(r as any);
+  }
+  for (const [code, list] of Object.entries(byCode)) {
+    const units = new Set(list.map((r) => r.unitNormalised || r.unitOriginal || "").filter(Boolean));
+    if (units.size > 1) {
+      anomalies.push({ analyte_short_code: code, type: "unit_mismatch", detail: Array.from(units) });
+    }
+    const numerics = list.filter((r) => r.valueNumeric !== null && r.valueNumeric !== undefined);
+    for (let i = 1; i < numerics.length; i++) {
+      const prev = numerics[i - 1].valueNumeric!;
+      const curr = numerics[i].valueNumeric!;
+      if (prev === 0) continue;
+      const ratio = curr / prev;
+      if (ratio > 3 || ratio < 0.33) {
+        anomalies.push({
+          analyte_short_code: code,
+          type: "sudden_change",
+          detail: { previous: prev, current: curr, reported_at: numerics[i].reportedDatetimeLocal },
+        });
+        break;
+      }
+    }
+  }
+  res.json({ anomalies });
+});
+
 app.get("/patients", authMiddleware, async (req: AuthedRequest, res) => {
   const patients = await prisma.patient.findMany({
-    where: { ownerUserId: req.user!.id },
+    where: {
+      OR: [
+        { ownerUserId: req.user!.id },
+        { familyAccount: { members: { some: { userId: req.user!.id } } } },
+      ],
+    },
     orderBy: { createdAtUtc: "desc" },
   });
   res.json({ patients });
 });
 
 app.get("/patients/:patientId", authMiddleware, async (req: AuthedRequest, res) => {
-  const patient = await prisma.patient.findFirst({
-    where: { id: req.params.patientId, ownerUserId: req.user!.id },
-  });
-  if (!patient) return res.status(404).json({ error: "Patient not found" });
-  res.json({ patient });
+  try {
+    const patient = await assertPatientAccess(req.user!, req.params.patientId);
+    res.json({ patient });
+  } catch {
+    return res.status(404).json({ error: "Patient not found" });
+  }
 });
 
 app.post("/patients", authMiddleware, async (req: AuthedRequest, res) => {
@@ -200,10 +254,12 @@ app.post("/patients", authMiddleware, async (req: AuthedRequest, res) => {
 });
 
 app.patch("/patients/:patientId", authMiddleware, async (req: AuthedRequest, res) => {
-  const patient = await prisma.patient.findFirst({
-    where: { id: req.params.patientId, ownerUserId: req.user!.id },
-  });
-  if (!patient) return res.status(404).json({ error: "Patient not found" });
+  let patient;
+  try {
+    patient = await assertPatientAccess(req.user!, req.params.patientId);
+  } catch {
+    return res.status(404).json({ error: "Patient not found" });
+  }
   const { fullName, dob, sex } = req.body;
   const updated = await prisma.patient.update({
     where: { id: patient.id },
@@ -217,20 +273,20 @@ app.patch("/patients/:patientId", authMiddleware, async (req: AuthedRequest, res
 });
 
 app.delete("/patients/:patientId", authMiddleware, async (req: AuthedRequest, res) => {
-  const patient = await prisma.patient.findFirst({
-    where: { id: req.params.patientId, ownerUserId: req.user!.id },
-  });
-  if (!patient) return res.status(404).json({ error: "Patient not found" });
-  await prisma.patient.delete({ where: { id: patient.id } });
+  try {
+    await assertPatientAccess(req.user!, req.params.patientId);
+  } catch {
+    return res.status(404).json({ error: "Patient not found" });
+  }
+  await prisma.patient.delete({ where: { id: req.params.patientId } });
   res.json({ success: true });
 });
 
 app.get("/patients/:patientId/reports", authMiddleware, async (req: AuthedRequest, res) => {
   const patientId = req.params.patientId;
-  const patient = await prisma.patient.findFirst({
-    where: { id: patientId, ownerUserId: req.user!.id },
-  });
-  if (!patient) {
+  try {
+    await assertPatientAccess(req.user!, patientId);
+  } catch {
     return res.status(404).json({ error: "Patient not found" });
   }
   const reports = await prisma.report.findMany({
@@ -247,10 +303,9 @@ app.post(
   upload.single("file"),
   async (req: AuthedRequest, res) => {
     const patientId = req.params.patientId;
-    const patient = await prisma.patient.findFirst({
-      where: { id: patientId, ownerUserId: req.user!.id },
-    });
-    if (!patient) {
+    try {
+      await assertPatientAccess(req.user!, patientId);
+    } catch {
       return res.status(404).json({ error: "Patient not found" });
     }
     const file = req.file;
@@ -313,27 +368,31 @@ app.post("/reports/:reportId/parsed", authMiddleware, async (req: AuthedRequest,
 
 app.get("/reports/:reportId", authMiddleware, async (req: AuthedRequest, res) => {
   const reportId = req.params.reportId;
-  const report = await prisma.report.findFirst({
-    where: { id: reportId, patient: { ownerUserId: req.user!.id } },
-    include: { sourceFile: true, results: true },
-  });
-  if (!report) {
+  try {
+    const report = await assertReportAccess(req.user!, reportId);
+    const full = await prisma.report.findFirst({
+      where: { id: report.id },
+      include: { sourceFile: true, results: true },
+    });
+    res.json({ report: full });
+  } catch {
     return res.status(404).json({ error: "Report not found" });
   }
-  res.json({ report });
 });
 
 app.get("/reports/:reportId/file", authMiddleware, async (req: AuthedRequest, res) => {
   const reportId = req.params.reportId;
-  const report = await prisma.report.findFirst({
-    where: { id: reportId, patient: { ownerUserId: req.user!.id } },
+  const report = await assertReportAccess(req.user!, reportId).catch(() => null);
+  if (!report) return res.status(404).json({ error: "Report not found" });
+  const full = await prisma.report.findFirst({
+    where: { id: report.id },
     include: { sourceFile: true },
   });
-  if (!report) return res.status(404).json({ error: "Report not found" });
   try {
-    const buffer = await storage.getFileBuffer(report.sourceFile.storageKey);
-    res.setHeader("Content-Type", report.sourceFile.contentType || "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${report.sourceFile.originalFilename}"`);
+    if (!full?.sourceFile) throw new Error("Missing source file");
+    const buffer = await storage.getFileBuffer(full.sourceFile.storageKey);
+    res.setHeader("Content-Type", full.sourceFile.contentType || "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${full.sourceFile.originalFilename}"`);
     res.send(buffer);
   } catch (err) {
     logger.error({ err }, "Failed to read source file");
@@ -344,10 +403,11 @@ app.get("/reports/:reportId/file", authMiddleware, async (req: AuthedRequest, re
 app.get("/patients/:patientId/results/export", authMiddleware, async (req: AuthedRequest, res) => {
   const { patientId } = req.params;
   const { analyte_short_code, from, to } = req.query as Record<string, string | undefined>;
-  const patient = await prisma.patient.findFirst({
-    where: { id: patientId, ownerUserId: req.user!.id },
-  });
-  if (!patient) return res.status(404).json({ error: "Patient not found" });
+  try {
+    await assertPatientAccess(req.user!, patientId);
+  } catch {
+    return res.status(404).json({ error: "Patient not found" });
+  }
   const fromDate = parseDate(from);
   const toDate = parseDate(to);
   const results = await prisma.result.findMany({
@@ -384,9 +444,7 @@ app.get("/patients/:patientId/results/export", authMiddleware, async (req: Authe
 
 app.get("/reports/:reportId/export", authMiddleware, async (req: AuthedRequest, res) => {
   const reportId = req.params.reportId;
-  const report = await prisma.report.findFirst({
-    where: { id: reportId, patient: { ownerUserId: req.user!.id } },
-  });
+  const report = await assertReportAccess(req.user!, reportId).catch(() => null);
   if (!report) return res.status(404).json({ error: "Report not found" });
   const results = await prisma.result.findMany({
     where: { reportId },
@@ -425,10 +483,11 @@ app.get("/reports/:reportId/export", authMiddleware, async (req: AuthedRequest, 
 
 app.get("/reports/:reportId/results", authMiddleware, async (req: AuthedRequest, res) => {
   const reportId = req.params.reportId;
-  const report = await prisma.report.findFirst({
-    where: { id: reportId, patient: { ownerUserId: req.user!.id } },
-  });
-  if (!report) return res.status(404).json({ error: "Report not found" });
+  try {
+    await assertReportAccess(req.user!, reportId);
+  } catch {
+    return res.status(404).json({ error: "Report not found" });
+  }
   const results = await prisma.result.findMany({
     where: { reportId },
     include: { referenceRanges: true },
@@ -476,10 +535,15 @@ app.patch("/results/:resultId/confirm-mapping", authMiddleware, async (req: Auth
   const { analyte_short_code } = req.body || {};
   if (!analyte_short_code) return res.status(400).json({ error: "analyte_short_code required" });
   const result = await prisma.result.findFirst({
-    where: { id: resultId, patient: { ownerUserId: req.user!.id } },
+    where: { id: resultId },
     include: { patient: true },
   });
   if (!result) return res.status(404).json({ error: "Result not found" });
+  try {
+    await assertPatientAccess(req.user!, result.patientId);
+  } catch {
+    return res.status(404).json({ error: "Result not found" });
+  }
   const family = await ensureFamilyAccountForUser(req.user!);
   const mapping = await prisma.mappingDictionary.upsert({
     where: {
@@ -505,7 +569,17 @@ app.patch("/results/:resultId/confirm-mapping", authMiddleware, async (req: Auth
       mappingMethod: "user_confirmed",
       mappingConfidence: "high",
       mappingDictionaryId: mapping.id,
+      mappingConfirmedByUserId: req.user!.id,
+      mappingConfirmedAtUtc: new Date(),
     },
+  });
+
+  await logAudit({
+    entityType: "result",
+    entityId: result.id,
+    action: "mapping_confirmed",
+    userId: req.user!.id,
+    payload: { analyte_short_code },
   });
 
   res.json({ result: updated, mapping });
@@ -515,9 +589,14 @@ app.patch("/results/:resultId/correction", authMiddleware, async (req: AuthedReq
   const { resultId } = req.params;
   const payload = req.body || {};
   const result = await prisma.result.findFirst({
-    where: { id: resultId, patient: { ownerUserId: req.user!.id } },
+    where: { id: resultId },
   });
   if (!result) return res.status(404).json({ error: "Result not found" });
+  try {
+    await assertPatientAccess(req.user!, result.patientId);
+  } catch {
+    return res.status(404).json({ error: "Result not found" });
+  }
 
   const updated = await prisma.result.update({
     where: { id: result.id },
@@ -534,6 +613,14 @@ app.patch("/results/:resultId/correction", authMiddleware, async (req: AuthedReq
       referenceRangeContext: payload.reference_range_context ?? result.referenceRangeContext,
       collectionContext: payload.collection_context ?? result.collectionContext,
     },
+  });
+
+  await logAudit({
+    entityType: "result",
+    entityId: result.id,
+    action: "result_corrected",
+    userId: req.user!.id,
+    payload,
   });
 
   res.json({ result: updated });

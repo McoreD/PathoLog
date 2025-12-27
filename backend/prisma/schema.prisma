@@ -136,6 +136,8 @@ model User {
   sourceFiles    SourceFile[]    @relation("FileUploader")
   mappingEntries MappingDictionary[]
   reviewTasks    ReviewTask[]    @relation("TaskResolver")
+  confirmedResults Result[]      @relation("ResultMappingConfirmed")
+  auditLogs      AuditLog[]
 }
 
 model FamilyAccount {
@@ -309,6 +311,9 @@ model Result {
   labNumber                    String?
   sourceAnchor                 String?
   extractionConfidence         ExtractionConfidence?
+  mappingConfirmedByUserId     String?
+  mappingConfirmedAtUtc        DateTime?
+  mappingConfirmedBy           User?     @relation("ResultMappingConfirmed", fields: [mappingConfirmedByUserId], references: [id])
   createdAtUtc                 DateTime  @default(now())
   updatedAtUtc                 DateTime  @updatedAt
   report                       Report    @relation(fields: [reportId], references: [id])
@@ -316,6 +321,18 @@ model Result {
   patient                      Patient   @relation(fields: [patientId], references: [id])
   mappingDictionary            MappingDictionary? @relation(fields: [mappingDictionaryId], references: [id])
   referenceRanges              ReferenceRange[]
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  entityType   String
+  entityId     String
+  action       String
+  userId       String?
+  payload      Json?
+  createdAtUtc DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id])
+  @@index([entityType, entityId])
 }
 
 model ReferenceRange {

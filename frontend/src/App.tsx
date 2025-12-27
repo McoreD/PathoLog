@@ -38,6 +38,7 @@ type TrendPoint = {
   refLow: number | null;
   refHigh: number | null;
 };
+type Anomaly = { analyte_short_code: string; type: string; detail?: any };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
@@ -116,6 +117,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [trendCode, setTrendCode] = useState("");
   const [trendData, setTrendData] = useState<TrendPoint[]>([]);
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
 
   const filteredResults = results.filter((r) => {
     if (!filter.trim()) return true;
@@ -142,9 +144,11 @@ export default function App() {
     if (selectedPatientId) {
       loadReports(selectedPatientId);
       loadResults(selectedPatientId);
+      loadAnomalies(selectedPatientId);
     } else {
       setReports([]);
       setResults([]);
+      setAnomalies([]);
     }
   }, [selectedPatientId]);
 
@@ -287,6 +291,15 @@ export default function App() {
       setTrendCode(analyteShortCode);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to load trend");
+    }
+  };
+
+  const loadAnomalies = async (patientId: string) => {
+    try {
+      const data = await fetchJSON<{ anomalies: Anomaly[] }>(`/patients/${patientId}/integrity/anomalies`);
+      setAnomalies(data.anomalies);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to load anomalies");
     }
   };
 
@@ -601,6 +614,22 @@ export default function App() {
                 <p className="muted">Enter a short code to view trend.</p>
               )}
             </div>
+          </section>
+
+          <section className="card">
+            <h2>Integrity flags</h2>
+            {!anomalies.length ? (
+              <p className="muted">No anomalies detected.</p>
+            ) : (
+              <ul className="list">
+                {anomalies.map((a, idx) => (
+                  <li key={idx} className="list-item">
+                    <strong>{a.analyte_short_code}</strong> — {a.type}
+                    {a.detail ? <div className="muted small">{JSON.stringify(a.detail)}</div> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="card">

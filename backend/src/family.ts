@@ -1,5 +1,6 @@
 import { prisma } from "./db.js";
 import { User } from "@prisma/client";
+import { ensureFamilyMembership } from "./access.js";
 
 export async function ensureFamilyAccountForUser(user: User) {
   const existing = await prisma.familyAccount.findFirst({
@@ -12,5 +13,6 @@ export async function ensureFamilyAccountForUser(user: User) {
       name: `${user.email.split("@")[0]} family`,
     },
   });
+  await ensureFamilyMembership(user);
   return created;
 }

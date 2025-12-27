@@ -3,6 +3,7 @@ import { parsedPayloadSchema, ParsedPayload } from "./schemas/parsedPayload.js";
 import { normalizeResults } from "./normalizer.js";
 import { logger } from "./logger.js";
 import { UserInputError } from "./utils/errors.js";
+import { logAudit } from "./audit.js";
 
 export async function ingestParsedReport(opts: { reportId: string; userId: string; payload: unknown }) {
   const parsed = parsedPayloadSchema.safeParse(opts.payload);
@@ -102,6 +103,14 @@ export async function ingestParsedReport(opts: { reportId: string; userId: strin
         parsingVersion: payload.parsing_version ?? report.parsingVersion,
       },
     });
+  });
+
+  await logAudit({
+    entityType: "report",
+    entityId: report.id,
+    action: "parsed_ingested",
+    userId: opts.userId,
+    payload: { parsing_version: payload.parsing_version, result_count: payload.results.length },
   });
 
   logger.info({ reportId: report.id }, "Parsed payload ingested");
