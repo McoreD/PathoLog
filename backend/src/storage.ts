@@ -1,6 +1,6 @@
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, writeFile, readFile } from "fs/promises";
 import path from "path";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
 
@@ -22,6 +22,11 @@ class LocalStorage {
     await ensureDir(path.dirname(fullPath));
     await writeFile(fullPath, buffer);
     return { storageProvider: "local", storageKey: key };
+  }
+
+  async getFileBuffer(key: string): Promise<Buffer> {
+    const fullPath = path.join(this.basePath, key);
+    return readFile(fullPath);
   }
 }
 
@@ -51,6 +56,21 @@ class S3Storage {
       }),
     );
     return { storageProvider: "s3", storageBucket: this.bucket, storageKey: key };
+  }
+
+  async getFileBuffer(key: string): Promise<Buffer> {
+    const { Body } = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      }),
+    );
+    if (!Body) throw new Error("Empty S3 body");
+    const chunks: Buffer[] = [];
+    for await (const chunk of Body as any as AsyncIterable<Buffer>) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
   }
 }
 

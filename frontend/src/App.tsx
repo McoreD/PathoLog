@@ -10,6 +10,7 @@ type Report = {
   createdAtUtc: string;
   sourceFile?: { originalFilename: string };
 };
+type ReviewReport = Report & { patient?: { fullName: string } };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
@@ -39,6 +40,7 @@ export default function App() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>("");
   const [reports, setReports] = useState<Report[]>([]);
+  const [needsReview, setNeedsReview] = useState<ReviewReport[]>([]);
   const [patientForm, setPatientForm] = useState({ fullName: "", dob: "", sex: "unknown" });
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,7 +50,7 @@ export default function App() {
       try {
         const data = await fetchJSON<{ user: User }>("/me");
         setUser(data.user);
-        await loadPatients();
+        await Promise.all([loadPatients(), loadNeedsReview()]);
       } catch {
         // not signed in yet
       }
@@ -69,6 +71,11 @@ export default function App() {
     if (!selectedPatientId && data.patients.length) {
       setSelectedPatientId(data.patients[0].id);
     }
+  };
+
+  const loadNeedsReview = async () => {
+    const data = await fetchJSON<{ reports: ReviewReport[] }>("/reports/needs-review");
+    setNeedsReview(data.reports);
   };
 
   const loadReports = async (patientId: string) => {
@@ -111,6 +118,7 @@ export default function App() {
       });
       setPatientForm({ fullName: "", dob: "", sex: "unknown" });
       await loadPatients();
+      await loadNeedsReview();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Could not create patient");
     } finally {
@@ -145,6 +153,7 @@ export default function App() {
       }
       setStatus("Upload saved");
       await loadReports(selectedPatientId);
+      await loadNeedsReview();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -297,6 +306,27 @@ export default function App() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </section>
+
+          <section className="card">
+            <h2>Needs review</h2>
+            {!needsReview.length ? (
+              <p className="muted">No low-confidence extractions yet.</p>
+            ) : (
+              <ul className="list">
+                {needsReview.map((r) => (
+                  <li key={r.id} className="list-item">
+                    <div className="row">
+                      <div>
+                        <div className="muted small">{r.patient?.fullName ?? "Unknown patient"}</div>
+                        <strong>{r.sourceFile?.originalFilename ?? "Report"}</strong>
+                      </div>
+                      <div>{r.parsingStatus}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
         </>

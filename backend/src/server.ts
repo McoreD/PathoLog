@@ -9,6 +9,7 @@ import { logger } from "./logger.js";
 import { createStorage } from "./storage.js";
 import { v4 as uuidv4 } from "uuid";
 import { prisma } from "./db.js";
+import { parseReport } from "./parser.js";
 
 const storage = createStorage();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -143,11 +144,38 @@ app.post(
       },
     });
 
+    // Kick off async parsing without blocking the upload response.
+    setImmediate(() => parseReport(report.id).catch((err) => logger.error({ err, reportId: report.id }, "Parse job failed")));
+
     res.status(201).json({ report, sourceFile });
   },
 );
 
-const port = Number(env.API_PORT || 4000);
+app.get("/reports/:reportId", authMiddleware, async (req: AuthedRequest, res) => {
+  const reportId = req.params.reportId;
+  const report = await prisma.report.findFirst({
+    where: { id: reportId, patient: { ownerUserId: req.user!.id } },
+    include: { sourceFile: true },
+  });
+  if (!report) {
+    return res.status(404).json({ error: "Report not found" });
+  }
+  res.json({ report });
+});
+
+app.get("/reports/needs-review", authMiddleware, async (req: AuthedRequest, res) => {
+  const reports = await prisma.report.findMany({
+    where: {
+      parsingStatus: "needs_review",
+      patient: { ownerUserId: req.user!.id },
+    },
+    orderBy: { updatedAtUtc: "desc" },
+    include: { patient: true },
+  });
+  res.json({ reports });
+});
+
+const port = Number(process.env.PORT || env.API_PORT || 4000);
 app.listen(port, () => {
   logger.info(`API listening on http://localhost:${port}`);
 });
