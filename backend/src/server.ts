@@ -239,21 +239,27 @@ app.get("/patients/:patientId", authMiddleware, async (req: AuthedRequest, res) 
 });
 
 app.post("/patients", authMiddleware, async (req: AuthedRequest, res) => {
-  const { fullName, dob, sex } = req.body;
-  if (!fullName) {
-    return res.status(400).json({ error: "fullName is required" });
+  try {
+    const { fullName, dob, sex } = req.body;
+    if (!fullName) {
+      return res.status(400).json({ error: "fullName is required" });
+    }
+    const family = await ensureFamilyAccountForUser(req.user!);
+    const patient = await prisma.patient.create({
+      data: {
+        fullName,
+        dob: dob ? new Date(dob) : null,
+        sex: sex ?? null,
+        ownerUserId: req.user!.id,
+        familyAccountId: family.id,
+      },
+    });
+    res.status(201).json({ patient });
+  } catch (err) {
+    logger.error({ err }, "Create patient failed");
+    const message = err instanceof Error ? err.message : "Create patient failed";
+    res.status(500).json({ error: "Create patient failed", detail: message });
   }
-  const family = await ensureFamilyAccountForUser(req.user!);
-  const patient = await prisma.patient.create({
-    data: {
-      fullName,
-      dob: dob ? new Date(dob) : null,
-      sex: sex ?? null,
-      ownerUserId: req.user!.id,
-      familyAccountId: family.id,
-    },
-  });
-  res.status(201).json({ patient });
 });
 
 app.patch("/patients/:patientId", authMiddleware, async (req: AuthedRequest, res) => {

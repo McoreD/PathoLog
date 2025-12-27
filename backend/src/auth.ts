@@ -92,23 +92,28 @@ export async function authMiddleware(
   res: Response,
   next: NextFunction,
 ) {
-  const principal = getPrincipal(req);
-  if (!principal) {
-    if (allowAnonymousAuth()) {
-      const user = await upsertUser({
-        provider: "local",
-        userId: "local",
-        email: "local@patholog.dev",
-        fullName: "Local User",
-      });
-      req.user = user;
-      return next();
+  try {
+    const principal = getPrincipal(req);
+    if (!principal) {
+      if (allowAnonymousAuth()) {
+        const user = await upsertUser({
+          provider: "local",
+          userId: "local",
+          email: "local@patholog.dev",
+          fullName: "Local User",
+        });
+        req.user = user;
+        return next();
+      }
+      return res.status(401).json({ error: "Authentication required" });
     }
-    return res.status(401).json({ error: "Authentication required" });
+    const user = await upsertUser(principal);
+    req.user = user;
+    next();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Auth failed";
+    return res.status(500).json({ error: "Authentication failed", detail: message });
   }
-  const user = await upsertUser(principal);
-  req.user = user;
-  next();
 }
 
 export async function getAuthUser(req: Request): Promise<User | null> {
