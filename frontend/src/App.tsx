@@ -1,18 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
-import { PublicClientApplication } from "@azure/msal-browser";
 import { Line } from "react-chartjs-2";
 import { Chart, LineElement, PointElement, LinearScale, TimeScale, CategoryScale, Tooltip, Legend } from "chart.js";
 import "./App.css";
 
 Chart.register(LineElement, PointElement, LinearScale, TimeScale, CategoryScale, Tooltip, Legend);
-type User = {
-  id: string;
-  email: string;
-  fullName?: string | null;
-  googleLinked: boolean;
-  microsoftLinked: boolean;
-};
+type User = { id: string; email: string; fullName?: string | null };
 type Patient = { id: string; fullName: string };
 type Report = {
   id: string;
@@ -48,21 +40,9 @@ type TrendPoint = {
 type Anomaly = { analyte_short_code: string; type: string; detail?: any };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
-const microsoftClientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID as string | undefined;
-const microsoftTenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID as string | undefined;
-const isMicrosoftConfigured = Boolean(microsoftClientId && microsoftTenantId);
-const msalApp = isMicrosoftConfigured
-  ? new PublicClientApplication({
-      auth: {
-        clientId: microsoftClientId!,
-        authority: `https://login.microsoftonline.com/${microsoftTenantId}`,
-      },
-      cache: {
-        cacheLocation: "sessionStorage",
-        storeAuthStateInCookie: false,
-      },
-    })
-  : null;
+const authReturnUrl = typeof window === "undefined" ? "/" : window.location.href;
+const loginUrl = `/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(authReturnUrl)}`;
+const logoutUrl = `/.auth/logout?post_logout_redirect_uri=${encodeURIComponent(authReturnUrl)}`;
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -89,6 +69,29 @@ function chooseValue(r: ResultRow, preferNormalised: boolean) {
   const value = r.valueNumeric ?? r.valueText ?? "";
   const unit = preferNormalised ? r.unitNormalised ?? r.unitOriginal ?? undefined : r.unitOriginal ?? r.unitNormalised ?? undefined;
   return `${value}${unit ? ` ${unit}` : ""}`;
+}
+
+function findClaim(principal: any, type: string) {
+  const claims = Array.isArray(principal?.claims) ? principal.claims : [];
+  const match = claims.find((claim: any) => claim?.typ?.toLowerCase() === type.toLowerCase());
+  return match?.val ?? null;
+}
+
+function resolveEmail(principal: any) {
+  const claim = findClaim(principal, "preferred_username") || findClaim(principal, "email") || findClaim(principal, "upn");
+  if (claim && claim.includes("@")) {
+    return claim;
+  }
+  const details = principal?.userDetails;
+  return typeof details === "string" && details.includes("@") ? details : null;
+}
+
+function resolveDisplayName(principal: any, email: string) {
+  const claim = findClaim(principal, "name") || findClaim(principal, "given_name");
+  if (claim && String(claim).trim()) {
+    return String(claim);
+  }
+  return email;
 }
 
 function TrendChart({ points, analyte }: { points: TrendPoint[]; analyte: string }) {
@@ -152,12 +155,10 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      try {
-        const data = await fetchJSON<{ user: User }>("/me");
-        setUser(data.user);
+      const authUser = await loadAuthUser();
+      if (authUser) {
+        setUser(authUser);
         await Promise.all([loadPatients(), loadNeedsReview()]);
-      } catch {
-        // not signed in yet
       }
     })();
   }, []);
@@ -197,71 +198,19 @@ export default function App() {
     setResults(data.results);
   };
 
-  const handleGoogle = async (cred: CredentialResponse) => {
-    if (!cred.credential) {
-      setStatus("Missing Google credential");
-      return;
-    }
-    setBusy(true);
+  const loadAuthUser = async (): Promise<User | null> => {
     try {
-      const resp = await fetchJSON<{ user: User }>("/auth/google", {
-        method: "POST",
-        body: JSON.stringify({ credential: cred.credential }),
-      });
-      setUser(resp.user);
-      setStatus(null);
-      await loadPatients();
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleGoogleLink = async (cred: CredentialResponse) => {
-    if (!cred.credential) {
-      setStatus("Missing Google credential");
-      return;
-    }
-    setBusy(true);
-    try {
-      const resp = await fetchJSON<{ user: User }>("/auth/google/link", {
-        method: "POST",
-        body: JSON.stringify({ credential: cred.credential }),
-      });
-      setUser(resp.user);
-      setStatus("Google account linked");
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Linking failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleMicrosoftLogin = async (mode: "login" | "link") => {
-    if (!msalApp) {
-      setStatus("Microsoft sign-in is not configured");
-      return;
-    }
-    setBusy(true);
-    try {
-      const result = await msalApp.loginPopup({
-        scopes: ["openid", "profile", "email"],
-        prompt: mode === "link" ? "select_account" : undefined,
-      });
-      const resp = await fetchJSON<{ user: User }>(mode === "link" ? "/auth/microsoft/link" : "/auth/microsoft", {
-        method: "POST",
-        body: JSON.stringify({ credential: result.idToken }),
-      });
-      setUser(resp.user);
-      setStatus(mode === "link" ? "Microsoft account linked" : null);
-      if (mode === "login") {
-        await loadPatients();
-      }
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Microsoft sign-in failed");
-    } finally {
-      setBusy(false);
+      const res = await fetch("/.auth/me", { credentials: "include" });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { clientPrincipal?: any };
+      const principal = data.clientPrincipal;
+      if (!principal?.userRoles?.includes("authenticated")) return null;
+      const email = resolveEmail(principal);
+      if (!email) return null;
+      const fullName = resolveDisplayName(principal, email);
+      return { id: principal.userId, email, fullName };
+    } catch {
+      return null;
     }
   };
 
@@ -327,11 +276,7 @@ export default function App() {
   };
 
   const logout = async () => {
-    await fetch(`${API_BASE}/auth/logout`, { method: "POST", credentials: "include" });
-    setUser(null);
-    setPatients([]);
-    setReports([]);
-    setSelectedPatientId("");
+    window.location.href = logoutUrl;
   };
 
   const saveShortCode = async (resultId: string, code: string) => {
@@ -429,46 +374,14 @@ export default function App() {
 
       {!user ? (
         <section className="card">
-          <h2>Sign in with Google</h2>
-          <GoogleLogin onSuccess={handleGoogle} onError={() => setStatus("Google login failed")} useOneTap />
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => handleMicrosoftLogin("login")}
-            disabled={busy || !isMicrosoftConfigured}
-          >
+          <h2>Sign in with Microsoft</h2>
+          <a className="ghost" href={loginUrl}>
             Sign in with Microsoft
-          </button>
-          {!isMicrosoftConfigured ? (
-            <p className="muted small">Microsoft sign-in needs VITE_MICROSOFT_CLIENT_ID and VITE_MICROSOFT_TENANT_ID.</p>
-          ) : null}
+          </a>
           {status ? <p className="status">{status}</p> : null}
         </section>
       ) : (
         <>
-          {!user.googleLinked || !user.microsoftLinked ? (
-            <section className="card">
-              <h2>Link accounts</h2>
-              <div className="stack">
-                {!user.googleLinked ? (
-                  <GoogleLogin onSuccess={handleGoogleLink} onError={() => setStatus("Google link failed")} />
-                ) : null}
-                {!user.microsoftLinked ? (
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => handleMicrosoftLogin("link")}
-                    disabled={busy || !isMicrosoftConfigured}
-                  >
-                    Link Microsoft account
-                  </button>
-                ) : null}
-                {!user.microsoftLinked && !isMicrosoftConfigured ? (
-                  <p className="muted small">Set Microsoft env vars to enable linking.</p>
-                ) : null}
-              </div>
-            </section>
-          ) : null}
           <section className="grid">
             <div className="card">
               <h2>Patients</h2>

@@ -14,9 +14,9 @@
 - [ ] Run migrations against Neon once: `cd backend && npx prisma migrate deploy` (with `DATABASE_URL` set).
 - [ ] SWA settings:
   - `VITE_API_BASE_URL` = `https://<your-app-service>.azurewebsites.net` (or API custom domain)
-  - `VITE_GOOGLE_CLIENT_ID` = same Google client ID
-  - `VITE_MICROSOFT_CLIENT_ID` = same Microsoft Entra client ID
-  - `VITE_MICROSOFT_TENANT_ID` = same Microsoft Entra tenant ID
+- [ ] SWA authentication:
+  - Configure Microsoft (AAD) provider in the Static Web App Authentication settings.
+  - Sign-in uses `/.auth/login/aad` and `/.auth/me` (no frontend auth env vars required).
 - [ ] GitHub secrets:
   - `AZURE_STATIC_WEB_APPS_API_TOKEN_<...>` for SWA
   - `AZURE_WEBAPP_PUBLISH_PROFILE` for App Service
