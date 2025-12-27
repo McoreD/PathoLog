@@ -4,7 +4,13 @@ import { Chart, LineElement, PointElement, LinearScale, TimeScale, CategoryScale
 import "./App.css";
 
 Chart.register(LineElement, PointElement, LinearScale, TimeScale, CategoryScale, Tooltip, Legend);
-type User = { id: string; email: string; fullName?: string | null };
+type User = {
+  id: string;
+  email: string;
+  fullName?: string | null;
+  googleLinked?: boolean;
+  microsoftLinked?: boolean;
+};
 type Patient = { id: string; fullName: string };
 type Report = {
   id: string;
@@ -45,8 +51,12 @@ type AiSettings = {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 const authReturnUrl = typeof window === "undefined" ? "/" : window.location.href;
+const profileReturnUrl =
+  typeof window === "undefined" ? "/" : `${window.location.origin}${window.location.pathname}#profile`;
 const loginMicrosoftUrl = `/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(authReturnUrl)}`;
 const loginGoogleUrl = `/.auth/login/google?post_login_redirect_uri=${encodeURIComponent(authReturnUrl)}`;
+const linkMicrosoftUrl = `/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(profileReturnUrl)}`;
+const linkGoogleUrl = `/.auth/login/google?post_login_redirect_uri=${encodeURIComponent(profileReturnUrl)}`;
 const logoutUrl = `/.auth/logout?post_logout_redirect_uri=${encodeURIComponent(authReturnUrl)}`;
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
@@ -75,29 +85,6 @@ function chooseValue(r: ResultRow, preferNormalised: boolean) {
   const value = r.valueNumeric ?? r.valueText ?? "";
   const unit = preferNormalised ? r.unitNormalised ?? r.unitOriginal ?? undefined : r.unitOriginal ?? r.unitNormalised ?? undefined;
   return `${value}${unit ? ` ${unit}` : ""}`;
-}
-
-function findClaim(principal: any, type: string) {
-  const claims = Array.isArray(principal?.claims) ? principal.claims : [];
-  const match = claims.find((claim: any) => claim?.typ?.toLowerCase() === type.toLowerCase());
-  return match?.val ?? null;
-}
-
-function resolveEmail(principal: any) {
-  const claim = findClaim(principal, "preferred_username") || findClaim(principal, "email") || findClaim(principal, "upn");
-  if (claim && claim.includes("@")) {
-    return claim;
-  }
-  const details = principal?.userDetails;
-  return typeof details === "string" && details.includes("@") ? details : null;
-}
-
-function resolveDisplayName(principal: any, email: string) {
-  const claim = findClaim(principal, "name") || findClaim(principal, "given_name");
-  if (claim && String(claim).trim()) {
-    return String(claim);
-  }
-  return email;
 }
 
 function TrendChart({ points, analyte }: { points: TrendPoint[]; analyte: string }) {
@@ -148,6 +135,9 @@ export default function App() {
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const [debugError, setDebugError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profileStatus, setProfileStatus] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [trendCode, setTrendCode] = useState("");
   const [trendData, setTrendData] = useState<TrendPoint[]>([]);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
@@ -169,14 +159,20 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const authUser = await loadAuthUser();
+      const authUser = await loadUserProfile();
       if (authUser) {
         setUser(authUser);
         await loadAiSettings();
         await Promise.all([loadPatients(), loadNeedsReview()]);
+      } else {
+        setUser(null);
       }
     })();
   }, []);
+
+  useEffect(() => {
+    setProfileName(user?.fullName ?? "");
+  }, [user]);
 
   useEffect(() => {
     if (selectedPatientId) {
@@ -231,17 +227,10 @@ export default function App() {
     setResults(data.results);
   };
 
-  const loadAuthUser = async (): Promise<User | null> => {
+  const loadUserProfile = async (): Promise<User | null> => {
     try {
-      const res = await fetch("/.auth/me", { credentials: "include" });
-      if (!res.ok) return null;
-      const data = (await res.json()) as { clientPrincipal?: any };
-      const principal = data.clientPrincipal;
-      if (!principal?.userRoles?.includes("authenticated")) return null;
-      const email = resolveEmail(principal);
-      if (!email) return null;
-      const fullName = resolveDisplayName(principal, email);
-      return { id: principal.userId, email, fullName };
+      const data = await fetchJSON<{ user: User }>("/me");
+      return data.user;
     } catch {
       return null;
     }
@@ -313,6 +302,24 @@ export default function App() {
 
   const logout = async () => {
     window.location.href = logoutUrl;
+  };
+
+  const saveProfile = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    setProfileStatus(null);
+    try {
+      const data = await fetchJSON<{ user: User }>("/me", {
+        method: "PATCH",
+        body: JSON.stringify({ fullName: profileName }),
+      });
+      setUser(data.user);
+      setProfileStatus("Profile updated");
+    } catch (err) {
+      setProfileStatus(err instanceof Error ? err.message : "Failed to update profile");
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const saveAiKey = async (e: FormEvent) => {
@@ -464,6 +471,67 @@ export default function App() {
       ) : (
         <>
           {debugError ? <div className="card"><div className="status">Error: {debugError}</div></div> : null}
+          <section className="card" id="profile">
+            <h2>Profile</h2>
+            <div className="grid">
+              <form className="stack" onSubmit={saveProfile}>
+                <label>
+                  Display name
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    placeholder={user?.email ?? "Display name"}
+                  />
+                </label>
+                <button type="submit" disabled={savingProfile}>
+                  {savingProfile ? "Saving..." : "Update display name"}
+                </button>
+                {profileStatus ? <p className="status">{profileStatus}</p> : null}
+                <p className="muted small">Shown in the app header.</p>
+              </form>
+              <div className="stack">
+                <div>
+                  <h3>Linked accounts</h3>
+                  <p className="muted small">
+                    Link providers by signing in with the same email address on each provider.
+                  </p>
+                </div>
+                <div className="list">
+                  <div className="list-item">
+                    <div className="row">
+                      <div>
+                        <strong>Microsoft</strong>
+                        <div className="muted small">{user?.microsoftLinked ? "Linked" : "Not linked"}</div>
+                      </div>
+                      {user?.microsoftLinked ? (
+                        <span className="muted small">Linked</span>
+                      ) : (
+                        <a className="ghost" href={linkMicrosoftUrl}>
+                          Link Microsoft
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <div className="list-item">
+                    <div className="row">
+                      <div>
+                        <strong>Google</strong>
+                        <div className="muted small">{user?.googleLinked ? "Linked" : "Not linked"}</div>
+                      </div>
+                      {user?.googleLinked ? (
+                        <span className="muted small">Linked</span>
+                      ) : (
+                        <a className="ghost" href={linkGoogleUrl}>
+                          Link Google
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
           <section className="grid">
             <div className="card">
               <h2>Patients</h2>

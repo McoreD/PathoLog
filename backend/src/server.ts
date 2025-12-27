@@ -48,11 +48,19 @@ app.use(
   }),
 );
 
-function toUserResponse(user: { id: string; email: string; fullName: string | null }) {
+function toUserResponse(user: {
+  id: string;
+  email: string;
+  fullName: string | null;
+  googleSub?: string | null;
+  microsoftSub?: string | null;
+}) {
   return {
     id: user.id,
     email: user.email,
     fullName: user.fullName,
+    googleLinked: Boolean(user.googleSub),
+    microsoftLinked: Boolean(user.microsoftSub),
   };
 }
 
@@ -81,6 +89,23 @@ app.get("/health", (_req, res) => {
 
 app.get("/me", authMiddleware, async (req: AuthedRequest, res) => {
   res.json({ user: toUserResponse(req.user!) });
+});
+
+app.patch("/me", authMiddleware, async (req: AuthedRequest, res) => {
+  const rawName = typeof req.body?.fullName === "string" ? req.body.fullName.trim() : "";
+  const fullName = rawName ? rawName : null;
+  const updated = await prisma.user.update({
+    where: { id: req.user!.id },
+    data: { fullName },
+  });
+  await logAudit({
+    entityType: "user",
+    entityId: updated.id,
+    action: "profile_updated",
+    userId: req.user!.id,
+    payload: { fullName },
+  });
+  res.json({ user: toUserResponse(updated) });
 });
 
 app.get("/patients/:patientId/results", authMiddleware, async (req: AuthedRequest, res) => {
