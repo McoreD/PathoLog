@@ -21,6 +21,7 @@ type ResultRow = {
   valueNumeric?: number | null;
   valueText?: string | null;
   unitOriginal?: string | null;
+  unitNormalised?: string | null;
   reportedDatetimeLocal?: string | null;
   resultType: string;
 };
@@ -59,6 +60,12 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 function formatDate(input: string | Date) {
   const date = typeof input === "string" ? new Date(input) : input;
   return date.toLocaleString();
+}
+
+function chooseValue(r: ResultRow, preferNormalised: boolean) {
+  const value = r.valueNumeric ?? r.valueText ?? "";
+  const unit = preferNormalised ? r.unitNormalised ?? r.unitOriginal ?? undefined : r.unitOriginal ?? r.unitNormalised ?? undefined;
+  return `${value}${unit ? ` ${unit}` : ""}`;
 }
 
 function TrendChart({ points, analyte }: { points: TrendPoint[]; analyte: string }) {
@@ -101,12 +108,23 @@ export default function App() {
   const [reports, setReports] = useState<Report[]>([]);
   const [needsReview, setNeedsReview] = useState<ReviewReport[]>([]);
   const [results, setResults] = useState<ResultRow[]>([]);
+  const [filter, setFilter] = useState("");
+  const [preferNormalised, setPreferNormalised] = useState(true);
   const [patientForm, setPatientForm] = useState({ fullName: "", dob: "", sex: "unknown" });
   const [mappingForm, setMappingForm] = useState({ pattern: "", shortCode: "" });
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [trendCode, setTrendCode] = useState("");
   const [trendData, setTrendData] = useState<TrendPoint[]>([]);
+
+  const filteredResults = results.filter((r) => {
+    if (!filter.trim()) return true;
+    const f = filter.toLowerCase();
+    return (
+      r.analyteNameOriginal.toLowerCase().includes(f) ||
+      (r.analyteShortCode ?? "").toLowerCase().includes(f)
+    );
+  });
 
   useEffect(() => {
     (async () => {
@@ -293,6 +311,17 @@ export default function App() {
     }
   };
 
+  const exportPatient = (analyte?: string) => {
+    if (!selectedPatientId) return;
+    const url = `${API_BASE}/patients/${selectedPatientId}/results/export${analyte ? `?analyte_short_code=${encodeURIComponent(analyte)}` : ""}`;
+    window.open(url, "_blank");
+  };
+
+  const exportReport = (reportId: string) => {
+    const url = `${API_BASE}/reports/${reportId}/export`;
+    window.open(url, "_blank");
+  };
+
   const headerText = useMemo(() => {
     if (user) {
       return `Welcome, ${user.fullName || user.email}`;
@@ -415,6 +444,7 @@ export default function App() {
                     <th>File</th>
                     <th>Status</th>
                     <th>Uploaded</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -423,6 +453,14 @@ export default function App() {
                       <td>{r.sourceFile?.originalFilename || "PDF"}</td>
                       <td>{r.parsingStatus}</td>
                       <td>{formatDate(r.createdAtUtc)}</td>
+                      <td>
+                        <button className="ghost" type="button" onClick={() => exportReport(r.id)}>
+                          Export CSV
+                        </button>
+                        <a className="ghost" href={`${API_BASE}/reports/${r.id}/file`} target="_blank" rel="noreferrer">
+                          View PDF
+                        </a>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -453,6 +491,31 @@ export default function App() {
 
           <section className="card">
             <h2>Results</h2>
+            <div className="filters">
+              <label className="inline">
+                Search
+                <input
+                  type="text"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  placeholder="Analyte name or code"
+                />
+              </label>
+              <label className="inline">
+                Prefer normalised unit
+                <input type="checkbox" checked={preferNormalised} onChange={(e) => setPreferNormalised(e.target.checked)} />
+              </label>
+              <div className="actions">
+                <button type="button" className="ghost" onClick={() => exportPatient()}>
+                  Export patient CSV
+                </button>
+                {trendCode ? (
+                  <button type="button" className="ghost" onClick={() => exportPatient(trendCode)}>
+                    Export {trendCode}
+                  </button>
+                ) : null}
+              </div>
+            </div>
             {!results.length ? (
               <p className="muted">No results ingested yet for this patient.</p>
             ) : (
@@ -466,16 +529,13 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {results.map((r) => (
+                  {filteredResults.map((r) => (
                     <tr key={r.id}>
                       <td>
                         <div>{r.analyteNameOriginal}</div>
                         <div className="muted small">{r.resultType}</div>
                       </td>
-                      <td>
-                        {r.valueNumeric ?? r.valueText ?? ""}
-                        {r.unitOriginal ? ` ${r.unitOriginal}` : ""}
-                      </td>
+                      <td className={`flag-${(r as any).flagSeverity || "normal"}`}>{chooseValue(r, preferNormalised)}</td>
                       <td>
                         <input
                           type="text"
@@ -505,6 +565,36 @@ export default function App() {
                   placeholder="e.g. TSH"
                 />
               </label>
+              {trendData.length >= 1 ? (
+                <div className="compare">
+                  {(() => {
+                    const last = trendData[trendData.length - 1];
+                    const prev = trendData.length > 1 ? trendData[trendData.length - 2] : null;
+                    const base = trendData[0];
+                    const val = last.valueNumeric ?? null;
+                    const prevVal = prev?.valueNumeric ?? null;
+                    const baseVal = base?.valueNumeric ?? null;
+                    const deltaPrev = prevVal !== null && val !== null ? val - prevVal : null;
+                    const deltaBase = baseVal !== null && val !== null ? val - baseVal : null;
+                    return (
+                      <>
+                        <div>
+                          <div className="muted small">Last</div>
+                          <strong>{val ?? last.valueText ?? "-"}</strong>
+                        </div>
+                        <div>
+                          <div className="muted small">vs prev</div>
+                          <strong>{deltaPrev !== null ? (deltaPrev > 0 ? `+${deltaPrev}` : deltaPrev) : "-"}</strong>
+                        </div>
+                        <div>
+                          <div className="muted small">vs baseline</div>
+                          <strong>{deltaBase !== null ? (deltaBase > 0 ? `+${deltaBase}` : deltaBase) : "-"}</strong>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : null}
               {trendData.length ? (
                 <TrendChart points={trendData} analyte={trendCode} />
               ) : (

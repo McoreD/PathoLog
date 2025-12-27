@@ -28,6 +28,19 @@ function parseDate(value?: string) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function toCsvRow(fields: (string | number | null | undefined)[]) {
+  return fields
+    .map((f) => {
+      if (f === null || f === undefined) return "";
+      const s = String(f);
+      if (s.includes('"') || s.includes(",") || s.includes("\n")) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    })
+    .join(",");
+}
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
@@ -302,12 +315,125 @@ app.get("/reports/:reportId", authMiddleware, async (req: AuthedRequest, res) =>
   const reportId = req.params.reportId;
   const report = await prisma.report.findFirst({
     where: { id: reportId, patient: { ownerUserId: req.user!.id } },
-    include: { sourceFile: true },
+    include: { sourceFile: true, results: true },
   });
   if (!report) {
     return res.status(404).json({ error: "Report not found" });
   }
   res.json({ report });
+});
+
+app.get("/reports/:reportId/file", authMiddleware, async (req: AuthedRequest, res) => {
+  const reportId = req.params.reportId;
+  const report = await prisma.report.findFirst({
+    where: { id: reportId, patient: { ownerUserId: req.user!.id } },
+    include: { sourceFile: true },
+  });
+  if (!report) return res.status(404).json({ error: "Report not found" });
+  try {
+    const buffer = await storage.getFileBuffer(report.sourceFile.storageKey);
+    res.setHeader("Content-Type", report.sourceFile.contentType || "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${report.sourceFile.originalFilename}"`);
+    res.send(buffer);
+  } catch (err) {
+    logger.error({ err }, "Failed to read source file");
+    res.status(500).json({ error: "Could not fetch file" });
+  }
+});
+
+app.get("/patients/:patientId/results/export", authMiddleware, async (req: AuthedRequest, res) => {
+  const { patientId } = req.params;
+  const { analyte_short_code, from, to } = req.query as Record<string, string | undefined>;
+  const patient = await prisma.patient.findFirst({
+    where: { id: patientId, ownerUserId: req.user!.id },
+  });
+  if (!patient) return res.status(404).json({ error: "Patient not found" });
+  const fromDate = parseDate(from);
+  const toDate = parseDate(to);
+  const results = await prisma.result.findMany({
+    where: {
+      patientId,
+      analyteShortCode: analyte_short_code ?? undefined,
+      reportedDatetimeLocal: {
+        gte: fromDate ?? undefined,
+        lte: toDate ?? undefined,
+      },
+    },
+    orderBy: [{ reportedDatetimeLocal: "desc" }, { createdAtUtc: "desc" }],
+  });
+  const rows = [
+    toCsvRow(["reported_datetime", "analyte", "short_code", "value_numeric", "value_text", "unit", "flag_severity", "ref_low", "ref_high"]),
+    ...results.map((r) =>
+      toCsvRow([
+        r.reportedDatetimeLocal?.toISOString() ?? "",
+        r.analyteNameOriginal,
+        r.analyteShortCode,
+        r.valueNumeric,
+        r.valueText,
+        r.unitNormalised ?? r.unitOriginal,
+        r.flagSeverity,
+        r.refLow,
+        r.refHigh,
+      ]),
+    ),
+  ];
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="patient-${patientId}-results.csv"`);
+  res.send(rows.join("\n"));
+});
+
+app.get("/reports/:reportId/export", authMiddleware, async (req: AuthedRequest, res) => {
+  const reportId = req.params.reportId;
+  const report = await prisma.report.findFirst({
+    where: { id: reportId, patient: { ownerUserId: req.user!.id } },
+  });
+  if (!report) return res.status(404).json({ error: "Report not found" });
+  const results = await prisma.result.findMany({
+    where: { reportId },
+    include: { referenceRanges: true },
+  });
+  const rows = [
+    toCsvRow([
+      "analyte",
+      "short_code",
+      "value_numeric",
+      "value_text",
+      "unit",
+      "flag_severity",
+      "ref_low",
+      "ref_high",
+      "reported_datetime",
+    ]),
+    ...results.map((r) =>
+      toCsvRow([
+        r.analyteNameOriginal,
+        r.analyteShortCode,
+        r.valueNumeric,
+        r.valueText,
+        r.unitNormalised ?? r.unitOriginal,
+        r.flagSeverity,
+        r.refLow ?? r.referenceRanges?.[0]?.refLow ?? "",
+        r.refHigh ?? r.referenceRanges?.[0]?.refHigh ?? "",
+        r.reportedDatetimeLocal?.toISOString() ?? "",
+      ]),
+    ),
+  ];
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="report-${reportId}.csv"`);
+  res.send(rows.join("\n"));
+});
+
+app.get("/reports/:reportId/results", authMiddleware, async (req: AuthedRequest, res) => {
+  const reportId = req.params.reportId;
+  const report = await prisma.report.findFirst({
+    where: { id: reportId, patient: { ownerUserId: req.user!.id } },
+  });
+  if (!report) return res.status(404).json({ error: "Report not found" });
+  const results = await prisma.result.findMany({
+    where: { reportId },
+    include: { referenceRanges: true },
+  });
+  res.json({ results });
 });
 
 app.post("/mapping-dictionary", authMiddleware, async (req: AuthedRequest, res) => {

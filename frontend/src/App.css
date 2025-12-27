@@ -155,3 +155,45 @@ td input[type="text"] {
 .chart-container {
   width: 100%;
 }
+
+.filters {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.filters .inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+}
+
+.filters .actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+[class^="flag-"],
+[class*=" flag-"] {
+  font-weight: 700;
+}
+.flag-high,
+.flag-critical {
+  color: #b91c1c;
+}
+.flag-low {
+  color: #2563eb;
+}
+.flag-borderline {
+  color: #d97706;
+}
