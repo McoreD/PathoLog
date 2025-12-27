@@ -217,7 +217,7 @@ app.get("/patients/:patientId/integrity/anomalies", authMiddleware, async (req: 
     if (!byCode[code]) byCode[code] = [];
     byCode[code].push(r as any);
   }
-  for (const [code, list] of Object.entries(byCode)) {
+  for (const [code, list] of Object.entries(byCode) as [string, typeof results][]) {
     const units = new Set(list.map((r) => r.unitNormalised || r.unitOriginal || "").filter(Boolean));
     if (units.size > 1) {
       anomalies.push({ analyte_short_code: code, type: "unit_mismatch", detail: Array.from(units) });

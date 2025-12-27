@@ -1,4 +1,5 @@
 import { prisma } from "./db.js";
+import type { Prisma } from "@prisma/client";
 import { parsedPayloadSchema, ParsedPayload } from "./schemas/parsedPayload.js";
 import { normalizeResults } from "./normalizer.js";
 import { logger } from "./logger.js";
@@ -26,7 +27,7 @@ export async function ingestParsedReport(opts: { reportId: string; userId: strin
     results: payload.results,
   });
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.referenceRange.deleteMany({
       where: { result: { reportId: report.id } },
     });
