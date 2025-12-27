@@ -128,6 +128,7 @@ model User {
   email          String          @unique
   fullName       String?
   googleSub      String?         @unique
+  microsoftSub   String?         @unique
   createdAtUtc   DateTime        @default(now())
   updatedAtUtc   DateTime        @updatedAt
   familyAccounts FamilyAccount[] @relation("FamilyOwner")

@@ -6,6 +6,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string(),
   AUTH_SECRET: z.string().min(30, "AUTH_SECRET should be long and random"),
   GOOGLE_CLIENT_ID: z.string(),
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_TENANT_ID: z.string().optional(),
   FRONTEND_ORIGIN: z.string().url(),
   STORAGE_PROVIDER: z.enum(["local", "s3"]).default("local"),
   LOCAL_STORAGE_PATH: z.string().default("../storage"),

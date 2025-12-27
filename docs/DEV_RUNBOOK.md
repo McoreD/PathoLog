@@ -33,6 +33,6 @@
 - S3 mode requires `S3_BUCKET`, region, credentials, and optional custom endpoint for MinIO.
 
 ## Development Workflow
-- Backend endpoints: `GET /health`, `POST /auth/google`, `POST /patients`, `GET/POST /patients/:patientId/reports`.
+- Backend endpoints: `GET /health`, `POST /auth/google`, `POST /auth/google/link`, `POST /auth/microsoft`, `POST /auth/microsoft/link`, `POST /patients`, `GET/POST /patients/:patientId/reports`.
 - Run frontend and backend concurrently; ensure CORS origin matches `.env`.
 - Add git commits after completing each stage; push to your remote as needed.

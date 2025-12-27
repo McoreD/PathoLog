@@ -7,12 +7,16 @@
   - `DATABASE_URL` = your Neon connection string (sslmode=require&channel_binding=require)
   - `AUTH_SECRET` = long random secret
   - `GOOGLE_CLIENT_ID` = Google OAuth Web client ID
+  - `MICROSOFT_CLIENT_ID` = Microsoft Entra app (SPA) client ID
+  - `MICROSOFT_TENANT_ID` = Microsoft Entra tenant ID (or `common`)
   - `FRONTEND_ORIGIN` = `https://gentle-desert-0814a2000.2.azurestaticapps.net` (add custom domain later)
   - `STORAGE_PROVIDER` = `local` (note: not durable across redeploy/scale; switch to Azure Blob later)
 - [ ] Run migrations against Neon once: `cd backend && npx prisma migrate deploy` (with `DATABASE_URL` set).
 - [ ] SWA settings:
   - `VITE_API_BASE_URL` = `https://<your-app-service>.azurewebsites.net` (or API custom domain)
   - `VITE_GOOGLE_CLIENT_ID` = same Google client ID
+  - `VITE_MICROSOFT_CLIENT_ID` = same Microsoft Entra client ID
+  - `VITE_MICROSOFT_TENANT_ID` = same Microsoft Entra tenant ID
 - [ ] GitHub secrets:
   - `AZURE_STATIC_WEB_APPS_API_TOKEN_<...>` for SWA
   - `AZURE_WEBAPP_PUBLISH_PROFILE` for App Service

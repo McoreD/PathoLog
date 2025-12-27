@@ -4,7 +4,7 @@ import cookieParser from "cookie-parser";
 import multer from "multer";
 import crypto from "crypto";
 import { env } from "./env.js";
-import { authMiddleware, createSessionToken, sessionCookieOptions, verifyGoogleCredential, AuthedRequest, SESSION_COOKIE } from "./auth.js";
+import { authMiddleware, createSessionToken, sessionCookieOptions, verifyGoogleCredential, verifyMicrosoftCredential, AuthedRequest, SESSION_COOKIE } from "./auth.js";
 import { logger } from "./logger.js";
 import { createStorage } from "./storage.js";
 import { v4 as uuidv4 } from "uuid";
@@ -39,6 +39,16 @@ app.use(
     legacyHeaders: false,
   }),
 );
+
+function toUserResponse(user: { id: string; email: string; fullName: string | null; googleSub: string | null; microsoftSub: string | null }) {
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    googleLinked: Boolean(user.googleSub),
+    microsoftLinked: Boolean(user.microsoftSub),
+  };
+}
 
 function parseDate(value?: string) {
   if (!value) return null;
@@ -80,9 +90,91 @@ app.post("/auth/google", async (req, res) => {
     await ensureFamilyMembership(user);
     const token = await createSessionToken(user);
     res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
-    res.json({ user: { id: user.id, email: user.email, fullName: user.fullName } });
+    res.json({ user: toUserResponse(user) });
   } catch (err) {
     logger.error({ err }, "Google auth failed");
+    res.status(401).json({ error: "Authentication failed" });
+  }
+});
+
+app.post("/auth/google/link", authMiddleware, async (req: AuthedRequest, res) => {
+  try {
+    const credential = req.body?.credential;
+    if (!credential) {
+      return res.status(400).json({ error: "Missing credential" });
+    }
+    const { sub, fullName } = await verifyGoogleCredential(credential);
+
+    const conflict = await prisma.user.findFirst({
+      where: { googleSub: sub, id: { not: req.user!.id } },
+    });
+    if (conflict) {
+      return res.status(409).json({ error: "Google account is already linked to another user" });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: {
+        googleSub: sub,
+        fullName: req.user!.fullName || fullName,
+      },
+    });
+    res.json({ user: toUserResponse(user) });
+  } catch (err) {
+    logger.error({ err }, "Google link failed");
+    res.status(401).json({ error: "Authentication failed" });
+  }
+});
+
+app.post("/auth/microsoft", async (req, res) => {
+  try {
+    const credential = req.body?.credential;
+    if (!credential) {
+      return res.status(400).json({ error: "Missing credential" });
+    }
+    const { email, sub, fullName } = await verifyMicrosoftCredential(credential);
+
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { microsoftSub: sub, fullName },
+      create: { email, microsoftSub: sub, fullName },
+    });
+    await ensureFamilyAccountForUser(user);
+    await ensureFamilyMembership(user);
+    const token = await createSessionToken(user);
+    res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
+    res.json({ user: toUserResponse(user) });
+  } catch (err) {
+    logger.error({ err }, "Microsoft auth failed");
+    res.status(401).json({ error: "Authentication failed" });
+  }
+});
+
+app.post("/auth/microsoft/link", authMiddleware, async (req: AuthedRequest, res) => {
+  try {
+    const credential = req.body?.credential;
+    if (!credential) {
+      return res.status(400).json({ error: "Missing credential" });
+    }
+    const { sub, fullName } = await verifyMicrosoftCredential(credential);
+
+    const conflict = await prisma.user.findFirst({
+      where: { microsoftSub: sub, id: { not: req.user!.id } },
+    });
+    if (conflict) {
+      return res.status(409).json({ error: "Microsoft account is already linked to another user" });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: {
+        microsoftSub: sub,
+        fullName: req.user!.fullName || fullName,
+      },
+    });
+    res.json({ user: toUserResponse(user) });
+  } catch (err) {
+    logger.error({ err }, "Microsoft link failed");
     res.status(401).json({ error: "Authentication failed" });
   }
 });
@@ -93,7 +185,7 @@ app.post("/auth/logout", (_req, res) => {
 });
 
 app.get("/me", authMiddleware, async (req: AuthedRequest, res) => {
-  res.json({ user: { id: req.user!.id, email: req.user!.email, fullName: req.user!.fullName } });
+  res.json({ user: toUserResponse(req.user!) });
 });
 
 app.get("/patients/:patientId/results", authMiddleware, async (req: AuthedRequest, res) => {

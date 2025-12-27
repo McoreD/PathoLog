@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { OAuth2Client } from "google-auth-library";
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, createRemoteJWKSet, jwtVerify } from "jose";
 import { env } from "./env.js";
 import { User } from "@prisma/client";
 import { logger } from "./logger.js";
@@ -11,6 +11,16 @@ export const SESSION_COOKIE = "patholog_session";
 
 const client = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 const jwtSecret = new TextEncoder().encode(env.AUTH_SECRET);
+function getMicrosoftConfig() {
+  if (!env.MICROSOFT_CLIENT_ID || !env.MICROSOFT_TENANT_ID) {
+    throw new Error("Microsoft auth is not configured");
+  }
+  const issuer = `https://login.microsoftonline.com/${env.MICROSOFT_TENANT_ID}/v2.0`;
+  const jwks = createRemoteJWKSet(
+    new URL(`https://login.microsoftonline.com/${env.MICROSOFT_TENANT_ID}/discovery/v2.0/keys`),
+  );
+  return { issuer, jwks };
+}
 
 export type AuthedRequest = Request & { user?: User };
 
@@ -27,6 +37,32 @@ export async function verifyGoogleCredential(credential: string) {
     email: payload.email,
     sub: payload.sub,
     fullName: payload.name ?? payload.email.split("@")[0],
+  };
+}
+
+export async function verifyMicrosoftCredential(credential: string) {
+  const { issuer, jwks } = getMicrosoftConfig();
+  const { payload } = await jwtVerify(credential, jwks, {
+    audience: env.MICROSOFT_CLIENT_ID!,
+    issuer: [issuer, `https://sts.windows.net/${env.MICROSOFT_TENANT_ID}/`],
+  });
+  const typed = payload as typeof payload & {
+    email?: string;
+    preferred_username?: string;
+    upn?: string;
+    name?: string;
+    tid?: string;
+    sub?: string;
+  };
+  const email = typed.email || typed.preferred_username || typed.upn;
+  if (!email || !typed.sub) {
+    throw new Error("Microsoft token missing required claims");
+  }
+  return {
+    email,
+    sub: typed.sub,
+    fullName: typed.name ?? email.split("@")[0],
+    tenantId: typed.tid ?? env.MICROSOFT_TENANT_ID,
   };
 }
 
