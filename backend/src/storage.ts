@@ -1,6 +1,7 @@
 import { mkdir, writeFile, readFile } from "fs/promises";
 import path from "path";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
 
@@ -72,6 +73,33 @@ class S3Storage {
     }
     return Buffer.concat(chunks);
   }
+}
+
+export type SignedUrl = { url: string; expiresAt: number };
+
+export function isSignedUrlSupported() {
+  return env.STORAGE_PROVIDER === "s3";
+}
+
+export async function createSignedUrl(key: string, expiresInSeconds: number): Promise<SignedUrl | null> {
+  if (env.STORAGE_PROVIDER !== "s3" || !env.S3_BUCKET) return null;
+  const client = new S3Client({
+    region: env.S3_REGION,
+    endpoint: env.S3_ENDPOINT || undefined,
+    forcePathStyle: Boolean(env.S3_ENDPOINT),
+    credentials: env.S3_ACCESS_KEY_ID
+      ? {
+          accessKeyId: env.S3_ACCESS_KEY_ID,
+          secretAccessKey: env.S3_SECRET_ACCESS_KEY || "",
+        }
+      : undefined,
+  });
+  const command = new GetObjectCommand({
+    Bucket: env.S3_BUCKET,
+    Key: key,
+  });
+  const url = await getSignedUrl(client, command, { expiresIn: expiresInSeconds });
+  return { url, expiresAt: Math.floor(Date.now() / 1000) + expiresInSeconds };
 }
 
 export function createStorage() {

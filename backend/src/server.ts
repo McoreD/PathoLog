@@ -15,6 +15,8 @@ import { ingestParsedReport } from "./ingest.js";
 import { UserInputError } from "./utils/errors.js";
 import { assertPatientAccess, assertReportAccess, ensureFamilyMembership } from "./access.js";
 import { logAudit } from "./audit.js";
+import rateLimit from "express-rate-limit";
+import { createSignedUrl, isSignedUrlSupported } from "./storage.js";
 
 const storage = createStorage();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -23,6 +25,14 @@ const app = express();
 app.use(cors({ origin: env.FRONTEND_ORIGIN, credentials: true }));
 app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
 
 function parseDate(value?: string) {
   if (!value) return null;
@@ -390,6 +400,12 @@ app.get("/reports/:reportId/file", authMiddleware, async (req: AuthedRequest, re
   });
   try {
     if (!full?.sourceFile) throw new Error("Missing source file");
+    if (isSignedUrlSupported()) {
+      const signed = await createSignedUrl(full.sourceFile.storageKey, env.SIGNED_URL_TTL_SECONDS);
+      if (signed) {
+        return res.json({ signedUrl: signed.url, expiresAt: signed.expiresAt });
+      }
+    }
     const buffer = await storage.getFileBuffer(full.sourceFile.storageKey);
     res.setHeader("Content-Type", full.sourceFile.contentType || "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${full.sourceFile.originalFilename}"`);
