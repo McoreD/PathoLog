@@ -38,7 +38,10 @@ type TrendPoint = {
   refHigh: number | null;
 };
 type Anomaly = { analyte_short_code: string; type: string; detail?: any };
-type AiSettings = { provider: string; hasKey: boolean };
+type AiSettings = {
+  activeProvider: string | null;
+  providers: { provider: string; hasKey: boolean }[];
+};
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 const authReturnUrl = typeof window === "undefined" ? "/" : window.location.href;
@@ -149,6 +152,7 @@ export default function App() {
   const [trendData, setTrendData] = useState<TrendPoint[]>([]);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
+  const [aiProvider, setAiProvider] = useState("openai");
   const [aiKey, setAiKey] = useState("");
   const [savingAi, setSavingAi] = useState(false);
 
@@ -207,6 +211,9 @@ export default function App() {
     try {
       const data = await fetchJSON<AiSettings>("/ai/settings");
       setAiSettings(data);
+      if (data.activeProvider) {
+        setAiProvider(data.activeProvider);
+      }
     } catch (err) {
       recordError("Load AI settings", err, "Failed to load AI settings");
     }
@@ -310,12 +317,19 @@ export default function App() {
     e.preventDefault();
     setSavingAi(true);
     try {
-      const payload = { apiKey: aiKey.trim() };
-      const data = await fetchJSON<AiSettings>("/ai/settings", {
+      const payload = { apiKey: aiKey.trim(), provider: aiProvider };
+      const data = await fetchJSON<{ provider: string; hasKey: boolean }>("/ai/settings", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      setAiSettings(data);
+      setAiSettings((prev) => {
+        if (!prev) {
+          return { activeProvider: payload.provider, providers: [{ provider: payload.provider, hasKey: data.hasKey }] };
+        }
+        const updated = prev.providers.filter((p) => p.provider !== payload.provider);
+        updated.unshift({ provider: payload.provider, hasKey: data.hasKey });
+        return { activeProvider: payload.provider, providers: updated };
+      });
       setAiKey("");
       setStatus("AI key saved");
       setDebugError(null);
@@ -729,18 +743,31 @@ export default function App() {
             <h2>AI settings</h2>
             <form className="stack" onSubmit={saveAiKey}>
               <label>
-                OpenAI API key
+                Provider
+                <select value={aiProvider} onChange={(e) => setAiProvider(e.target.value)}>
+                  <option value="openai">OpenAI</option>
+                  <option value="gemini">Gemini</option>
+                </select>
+              </label>
+              <label>
+                API key
                 <input
                   type="password"
                   value={aiKey}
                   onChange={(e) => setAiKey(e.target.value)}
-                  placeholder={aiSettings?.hasKey ? "Key saved (enter to replace)" : "sk-..."}
+                  placeholder={
+                    aiSettings?.providers?.find((p) => p.provider === aiProvider)?.hasKey
+                      ? "Key saved (enter to replace)"
+                      : "sk-..."
+                  }
                 />
               </label>
               <button type="submit" disabled={savingAi}>
-                {aiSettings?.hasKey ? "Update key" : "Save key"}
+                {aiSettings?.providers?.find((p) => p.provider === aiProvider)?.hasKey ? "Update key" : "Save key"}
               </button>
-              {aiSettings?.hasKey ? <div className="muted small">Key is stored securely on the server.</div> : null}
+              {aiSettings?.providers?.find((p) => p.provider === aiProvider)?.hasKey ? (
+                <div className="muted small">Key is stored securely on the server.</div>
+              ) : null}
             </form>
           </section>
         </>

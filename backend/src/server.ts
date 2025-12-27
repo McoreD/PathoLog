@@ -365,24 +365,33 @@ app.post(
 );
 
 app.get("/ai/settings", authMiddleware, async (req: AuthedRequest, res) => {
-  const setting = await prisma.userAiSetting.findUnique({
-    where: { userId_provider: { userId: req.user!.id, provider: "openai" } },
+  const settings = await prisma.userAiSetting.findMany({
+    where: { userId: req.user!.id },
+    select: { provider: true, apiKey: true, updatedAtUtc: true },
+    orderBy: { updatedAtUtc: "desc" },
   });
-  res.json({ provider: "openai", hasKey: Boolean(setting?.apiKey) });
+  res.json({
+    activeProvider: settings[0]?.provider ?? null,
+    providers: settings.map((s) => ({ provider: s.provider, hasKey: Boolean(s.apiKey) })),
+  });
 });
 
 app.post("/ai/settings", authMiddleware, async (req: AuthedRequest, res) => {
+  const provider = (req.body?.provider ?? "openai").trim().toLowerCase();
+  if (!["openai", "gemini"].includes(provider)) {
+    return res.status(400).json({ error: "Unsupported provider" });
+  }
   const apiKey = (req.body?.apiKey ?? "").trim();
   if (!apiKey) {
     await prisma.userAiSetting.deleteMany({
-      where: { userId: req.user!.id, provider: "openai" },
+      where: { userId: req.user!.id, provider },
     });
-    return res.json({ provider: "openai", hasKey: false });
+    return res.json({ provider, hasKey: false });
   }
   const setting = await prisma.userAiSetting.upsert({
-    where: { userId_provider: { userId: req.user!.id, provider: "openai" } },
+    where: { userId_provider: { userId: req.user!.id, provider } },
     update: { apiKey },
-    create: { userId: req.user!.id, provider: "openai", apiKey },
+    create: { userId: req.user!.id, provider, apiKey },
   });
   res.json({ provider: setting.provider, hasKey: true });
 });

@@ -1,8 +1,10 @@
 import { prisma } from "../db.js";
 import { logger } from "../logger.js";
-import { requestStructuredCompletion } from "./openai.js";
+import { requestStructuredCompletion as requestOpenAiCompletion } from "./openai.js";
+import { requestGeminiCompletion } from "./gemini.js";
 
-const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
+const DEFAULT_OPENAI_MODEL = "gpt-5.1";
+const DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview";
 
 const PARSED_PAYLOAD_SCHEMA = {
   type: "object",
@@ -106,19 +108,15 @@ const SHORT_CODE_SCHEMA = {
   required: ["mappings"],
 };
 
-async function getUserAiKey(userId: string, provider: string) {
-  return prisma.userAiSetting.findUnique({
-    where: {
-      userId_provider: {
-        userId,
-        provider,
-      },
-    },
+async function getLatestAiSetting(userId: string) {
+  return prisma.userAiSetting.findFirst({
+    where: { userId },
+    orderBy: { updatedAtUtc: "desc" },
   });
 }
 
 export async function extractParsedPayload(userId: string, rawText: string) {
-  const settings = await getUserAiKey(userId, "openai");
+  const settings = await getLatestAiSetting(userId);
   if (!settings) return null;
 
   const prompt = [
@@ -129,13 +127,22 @@ export async function extractParsedPayload(userId: string, rawText: string) {
     rawText.slice(0, 120000),
   ].join("\n");
 
-  const result = await requestStructuredCompletion({
-    apiKey: settings.apiKey,
-    model: DEFAULT_OPENAI_MODEL,
-    systemInstruction: "You are a medical data extraction assistant.",
-    prompt,
-    responseSchema: PARSED_PAYLOAD_SCHEMA,
-  });
+  const result =
+    settings.provider === "gemini"
+      ? await requestGeminiCompletion({
+          apiKey: settings.apiKey,
+          model: DEFAULT_GEMINI_MODEL,
+          systemInstruction: "You are a medical data extraction assistant.",
+          prompt,
+          responseSchema: PARSED_PAYLOAD_SCHEMA,
+        })
+      : await requestOpenAiCompletion({
+          apiKey: settings.apiKey,
+          model: DEFAULT_OPENAI_MODEL,
+          systemInstruction: "You are a medical data extraction assistant.",
+          prompt,
+          responseSchema: PARSED_PAYLOAD_SCHEMA,
+        });
 
   if (!result.ok) {
     logger.warn({ error: result.error }, "AI parse failed");
@@ -145,7 +152,7 @@ export async function extractParsedPayload(userId: string, rawText: string) {
 }
 
 export async function suggestShortCodes(userId: string, analytes: string[]) {
-  const settings = await getUserAiKey(userId, "openai");
+  const settings = await getLatestAiSetting(userId);
   if (!settings || !analytes.length) return new Map<string, string>();
 
   const prompt = [
@@ -155,13 +162,22 @@ export async function suggestShortCodes(userId: string, analytes: string[]) {
     JSON.stringify(analytes),
   ].join("\n");
 
-  const result = await requestStructuredCompletion({
-    apiKey: settings.apiKey,
-    model: DEFAULT_OPENAI_MODEL,
-    systemInstruction: "You generate short, consistent lab analyte codes.",
-    prompt,
-    responseSchema: SHORT_CODE_SCHEMA,
-  });
+  const result =
+    settings.provider === "gemini"
+      ? await requestGeminiCompletion({
+          apiKey: settings.apiKey,
+          model: DEFAULT_GEMINI_MODEL,
+          systemInstruction: "You generate short, consistent lab analyte codes.",
+          prompt,
+          responseSchema: SHORT_CODE_SCHEMA,
+        })
+      : await requestOpenAiCompletion({
+          apiKey: settings.apiKey,
+          model: DEFAULT_OPENAI_MODEL,
+          systemInstruction: "You generate short, consistent lab analyte codes.",
+          prompt,
+          responseSchema: SHORT_CODE_SCHEMA,
+        });
 
   if (!result.ok) {
     logger.warn({ error: result.error }, "AI short code lookup failed");
