@@ -15,6 +15,7 @@ const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   SIGNED_URL_TTL_SECONDS: z.coerce.number().min(60).max(60 * 60 * 24).default(900),
+  APPINSIGHTS_CONNECTION_STRING: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

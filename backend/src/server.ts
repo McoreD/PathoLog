@@ -17,9 +17,15 @@ import { assertPatientAccess, assertReportAccess, ensureFamilyMembership } from 
 import { logAudit } from "./audit.js";
 import rateLimit from "express-rate-limit";
 import { createSignedUrl, isSignedUrlSupported } from "./storage.js";
+import appInsights from "applicationinsights";
 
 const storage = createStorage();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+if (env.APPINSIGHTS_CONNECTION_STRING) {
+  appInsights.setup(env.APPINSIGHTS_CONNECTION_STRING).setSendLiveMetrics(true).start();
+  logger.info("Application Insights enabled");
+}
 
 const app = express();
 app.use(cors({ origin: env.FRONTEND_ORIGIN, credentials: true }));
