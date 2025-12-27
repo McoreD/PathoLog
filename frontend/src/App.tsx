@@ -87,6 +87,29 @@ function chooseValue(r: ResultRow, preferNormalised: boolean) {
   return `${value}${unit ? ` ${unit}` : ""}`;
 }
 
+function findClaim(principal: any, type: string) {
+  const claims = Array.isArray(principal?.claims) ? principal.claims : [];
+  const match = claims.find((claim: any) => claim?.typ?.toLowerCase() === type.toLowerCase());
+  return match?.val ?? null;
+}
+
+function resolveEmail(principal: any) {
+  const claim = findClaim(principal, "preferred_username") || findClaim(principal, "email") || findClaim(principal, "upn");
+  if (claim && claim.includes("@")) {
+    return claim;
+  }
+  const details = principal?.userDetails;
+  return typeof details === "string" && details.includes("@") ? details : null;
+}
+
+function resolveDisplayName(principal: any, email: string) {
+  const claim = findClaim(principal, "name") || findClaim(principal, "given_name");
+  if (claim && String(claim).trim()) {
+    return String(claim);
+  }
+  return email;
+}
+
 function TrendChart({ points, analyte }: { points: TrendPoint[]; analyte: string }) {
   const labels = points.map((p) => p.reportedDatetimeLocal || p.collectedDatetimeLocal || "");
   const data = {
@@ -159,10 +182,14 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const authUser = await loadUserProfile();
+      const authUser = await loadAuthPrincipal();
       if (authUser) {
         setUser(authUser);
-        await loadAiSettings();
+        const profile = await loadUserProfile();
+        if (profile) {
+          setUser((prev) => ({ ...prev, ...profile }));
+        }
+        await loadAiSettings().catch(() => null);
         await Promise.all([loadPatients(), loadNeedsReview()]);
       } else {
         setUser(null);
@@ -225,6 +252,22 @@ export default function App() {
   const loadResults = async (patientId: string) => {
     const data = await fetchJSON<{ results: ResultRow[] }>(`/patients/${patientId}/results`);
     setResults(data.results);
+  };
+
+  const loadAuthPrincipal = async (): Promise<User | null> => {
+    try {
+      const res = await fetch("/.auth/me", { credentials: "include" });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { clientPrincipal?: any };
+      const principal = data.clientPrincipal;
+      if (!principal?.userRoles?.includes("authenticated")) return null;
+      const email = resolveEmail(principal);
+      if (!email) return null;
+      const fullName = resolveDisplayName(principal, email);
+      return { id: principal.userId, email, fullName };
+    } catch {
+      return null;
+    }
   };
 
   const loadUserProfile = async (): Promise<User | null> => {
