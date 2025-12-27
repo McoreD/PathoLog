@@ -155,6 +155,8 @@ export default function App() {
   const [aiProvider, setAiProvider] = useState("openai");
   const [aiKey, setAiKey] = useState("");
   const [savingAi, setSavingAi] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
+  const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
 
   const filteredResults = results.filter((r) => {
     if (!filter.trim()) return true;
@@ -337,6 +339,19 @@ export default function App() {
       recordError("Save AI key", err, "Failed to save AI key");
     } finally {
       setSavingAi(false);
+    }
+  };
+
+  const runDiagnostics = async () => {
+    setLoadingDiagnostics(true);
+    try {
+      const data = await fetchJSON<Record<string, unknown>>("/diagnostics/db");
+      setDiagnostics(data);
+      setDebugError(null);
+    } catch (err) {
+      recordError("Run diagnostics", err, "Failed to run diagnostics");
+    } finally {
+      setLoadingDiagnostics(false);
     }
   };
 
@@ -769,6 +784,19 @@ export default function App() {
                 <div className="muted small">Key is stored securely on the server.</div>
               ) : null}
             </form>
+          </section>
+
+          <section className="card">
+            <h2>Troubleshooting</h2>
+            <p className="muted">
+              Query database metadata, counts, and recent rows to validate schema and data flow.
+            </p>
+            <button type="button" className="ghost" onClick={runDiagnostics} disabled={loadingDiagnostics}>
+              {loadingDiagnostics ? "Running diagnostics..." : "Run diagnostics"}
+            </button>
+            {diagnostics ? (
+              <pre className="debug-block">{JSON.stringify(diagnostics, null, 2)}</pre>
+            ) : null}
           </section>
         </>
       )}

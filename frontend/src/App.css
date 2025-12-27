@@ -149,6 +149,18 @@ button.ghost:hover,
   font-weight: 600;
 }
 
+.debug-block {
+  margin-top: 0.75rem;
+  background: #0b1021;
+  border: 1px solid var(--page-border);
+  border-radius: 12px;
+  padding: 0.75rem;
+  color: var(--page-text);
+  max-height: 360px;
+  overflow: auto;
+  font-size: 0.85rem;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

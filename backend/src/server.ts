@@ -579,6 +579,69 @@ app.post("/mapping-dictionary", authMiddleware, async (req: AuthedRequest, res) 
   res.status(201).json({ entry });
 });
 
+app.get("/diagnostics/db", authMiddleware, async (req: AuthedRequest, res) => {
+  try {
+    const tables = await prisma.$queryRaw<
+      { table_name: string }[]
+    >`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`;
+    const tableNames = tables.map((t) => t.table_name);
+
+    const targetTables = [
+      "User",
+      "Patient",
+      "Report",
+      "Result",
+      "MappingDictionary",
+      "UserAiSetting",
+      "FamilyAccount",
+      "FamilyMember",
+    ];
+
+    const columns: Record<string, { column_name: string; data_type: string; is_nullable: string }[]> = {};
+    for (const table of targetTables) {
+      columns[table] = await prisma.$queryRaw<
+        { column_name: string; data_type: string; is_nullable: string }[]
+      >`SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = ${table}
+        ORDER BY ordinal_position`;
+    }
+
+    const counts = {
+      users: await prisma.user.count(),
+      patients: await prisma.patient.count(),
+      reports: await prisma.report.count(),
+      results: await prisma.result.count(),
+      mappingDictionary: await prisma.mappingDictionary.count(),
+      aiSettings: await prisma.userAiSetting.count(),
+    };
+
+    const recentPatients = await prisma.patient.findMany({
+      orderBy: { createdAtUtc: "desc" },
+      take: 5,
+      select: { id: true, fullName: true, createdAtUtc: true, familyAccountId: true },
+    });
+
+    const recentReports = await prisma.report.findMany({
+      orderBy: { createdAtUtc: "desc" },
+      take: 5,
+      select: { id: true, parsingStatus: true, createdAtUtc: true, patientId: true },
+    });
+
+    res.json({
+      ok: true,
+      tables: tableNames,
+      counts,
+      columns,
+      recentPatients,
+      recentReports,
+    });
+  } catch (err) {
+    logger.error({ err }, "Diagnostics failed");
+    res.status(500).json({ error: "Diagnostics failed", detail: err instanceof Error ? err.message : "Unknown error" });
+  }
+});
+
 app.patch("/results/:resultId/confirm-mapping", authMiddleware, async (req: AuthedRequest, res) => {
   const { resultId } = req.params;
   const { analyte_short_code } = req.body || {};
