@@ -72,8 +72,8 @@ var output = new
     results
 };
 
-var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-var folder = Path.Combine(appData, "PathoLog", "cli-reports");
+var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+var folder = Path.Combine(docs, "PathoLog", "cli-reports");
 Directory.CreateDirectory(folder);
 var outfile = Path.Combine(folder, $"report-{DateTime.Now:yyyyMMdd-HHmmss}.json");
 await File.WriteAllTextAsync(outfile, JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));

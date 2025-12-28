@@ -9,8 +9,8 @@ public sealed class SettingsStore
 
     public SettingsStore()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var folder = Path.Combine(appData, "PathoLog");
+        var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var folder = Path.Combine(docs, "PathoLog");
         Directory.CreateDirectory(folder);
         _settingsPath = Path.Combine(folder, "settings.json");
     }
