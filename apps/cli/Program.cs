@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using UglyToad.PdfPig;
 
-namespace PathoLog.Wpf.Cli;
+namespace PathoLog.Cli;
 
 internal static class Program
 {
@@ -14,7 +14,7 @@ internal static class Program
         var argsDict = ParseArgs(args);
         if (!argsDict.TryGetValue("file", out var filePath))
         {
-            Console.WriteLine("Usage: dotnet run --project apps/cli/PathoLog.Wpf.Cli.csproj -- --file <pdf> [--patient \"Name\"] [--email you@example.com] [--save] [--show-text]");
+            Console.WriteLine("Usage: dotnet run --project apps/cli/PathoLog.Cli.csproj -- --file <pdf> [--patient \"Name\"] [--email you@example.com] [--save] [--show-text]");
             return 1;
         }
 
@@ -24,7 +24,7 @@ internal static class Program
         var save = argsDict.ContainsKey("save");
         var showText = argsDict.ContainsKey("show-text");
 
-        Console.WriteLine("PathoLog WPF CLI");
+        Console.WriteLine("PathoLog CLI");
         Console.WriteLine($"File   : {filePath}");
         Console.WriteLine($"Patient: {patientName}");
         Console.WriteLine($"Email  : {email}");
