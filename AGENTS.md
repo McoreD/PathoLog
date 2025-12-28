@@ -62,3 +62,7 @@
 
 - For changes, summarize what changed and where.
 - Provide next steps only when they are natural and actionable.
+
+## Branch mirroring
+
+- Mirror relevant updates to the dev-web-ts and dev-web-csharp branches unless explicitly told not to.
