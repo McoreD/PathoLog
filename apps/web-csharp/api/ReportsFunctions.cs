@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Linq;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 
@@ -76,10 +77,23 @@ public class ReportsFunctions
 
             var fileId = await Data.CreateSourceFile(_cs, upload.Filename, upload.ContentType, bytes.Length, bytes);
             var report = await Data.CreateReport(_cs, id, fileId);
+            var openAiKey = await Data.GetAiKey(_cs, user.Id, "openai");
+            var geminiKey = await Data.GetAiKey(_cs, user.Id, "gemini");
+            var parsed = await AiParsingService.ParseAsync(bytes, openAiKey, geminiKey);
+            await Data.DeleteResultsForReport(_cs, report.Id);
+            await Data.InsertResults(_cs, report.Id, report.PatientId, parsed.ToList());
+            var parsingStatus = AiParsingService.NeedsReview(parsed) ? "needs_review" : "completed";
+            await Data.UpdateReportStatus(_cs, report.Id, parsingStatus);
             var res = req.CreateResponse(HttpStatusCode.Created);
             await res.WriteAsJsonAsync(new
             {
-                report = ToReportResponse(report, upload.Filename)
+                report = new
+                {
+                    id = report.Id.ToString(),
+                    parsingStatus,
+                    createdAtUtc = report.CreatedAtUtc,
+                    sourceFile = new { originalFilename = upload.Filename }
+                }
             });
             return res;
         }

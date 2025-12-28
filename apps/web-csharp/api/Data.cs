@@ -415,6 +415,17 @@ order by updated_at desc;";
         return rows.ToList();
     }
 
+    public static async Task<string?> GetAiKey(string cs, Guid userId, string provider)
+    {
+        const string sql = @"
+select api_key as ApiKey
+from ai_settings
+where user_id = @UserId and provider = @Provider;";
+        await using var db = Conn(cs);
+        var row = await db.QuerySingleOrDefaultAsync<(string? ApiKey)>(sql, new { UserId = userId, Provider = provider });
+        return row.ApiKey;
+    }
+
     public static async Task UpsertAiKey(string cs, Guid userId, string provider, string apiKey)
     {
         const string sql = @"

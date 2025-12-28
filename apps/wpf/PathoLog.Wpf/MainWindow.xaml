@@ -96,7 +96,7 @@
 
                     <StackPanel Grid.Column="1" Margin="16,0,0,0">
                         <TextBlock Text="Selected file" FontWeight="Bold" />
-                        <TextBlock Text="{Binding SelectedFileName}" Margin="0,4,0,16" />
+                        <TextBlock Text="{Binding SelectedFilesLabel}" Margin="0,4,0,16" />
                         <StackPanel Orientation="Horizontal">
                             <Button Content="Choose PDF" Width="120" Command="{Binding SelectPdfCommand}" />
                             <Button Content="Start Import" Width="120" Margin="12,0,0,0" Command="{Binding ImportPdfCommand}" />

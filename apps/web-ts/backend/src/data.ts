@@ -396,6 +396,18 @@ order by updated_at desc
   return res.rows;
 }
 
+export async function getAiKey(userId: string, provider: string) {
+  const res = await query<{ api_key: string | null }>(
+    `
+select api_key
+from ai_settings
+where user_id = $1 and provider = $2
+`,
+    [userId, provider],
+  );
+  return res.rows[0]?.api_key ?? null;
+}
+
 export async function upsertAiKey(userId: string, provider: string, apiKey: string) {
   const id = crypto.randomUUID();
   await query(
