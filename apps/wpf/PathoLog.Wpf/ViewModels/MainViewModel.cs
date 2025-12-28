@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -148,6 +149,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 var report = new ReportSummary(reportId, DateTime.Now.ToString("yyyy-MM-dd"), System.IO.Path.GetFileName(file));
                 Reports.Insert(0, report);
                 SelectedReport = report;
+                var parsedResults = new List<ResultRow>
+                {
+                    new ResultRow("TSH", "2.1", "mIU/L", "Normal"),
+                    new ResultRow("FT4", "14.8", "pmol/L", "Normal"),
+                    new ResultRow("HbA1c", "6.1", "%", "Borderline")
+                };
+                var parsedReviews = new List<ReviewTaskRow>
+                {
+                    new ReviewTaskRow("results[2].unit", "Unit mismatch needs confirmation")
+                };
+
                 Results.Clear();
                 Results.Add(new ResultRow("Uploaded PDF", "Pending parse", file, "Queued"));
                 ImportStatus = $"Import queued for {System.IO.Path.GetFileName(file)}";
@@ -160,13 +172,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 ImportStatus = "Normalising results...";
 
                 Results.Clear();
-                Results.Add(new ResultRow("TSH", "2.1", "mIU/L", "Normal"));
-                Results.Add(new ResultRow("FT4", "14.8", "pmol/L", "Normal"));
-                Results.Add(new ResultRow("HbA1c", "6.1", "%", "Borderline"));
+                foreach (var r in parsedResults) Results.Add(r);
                 ReviewTasks.Clear();
-                ReviewTasks.Add(new ReviewTaskRow("results[2].unit", "Unit mismatch needs confirmation"));
+                foreach (var r in parsedReviews) ReviewTasks.Add(r);
 
                 ImportStatus = $"Import completed for {System.IO.Path.GetFileName(file)}";
+
+                SaveReportJsonToDisk(file, parsedResults, parsedReviews);
             }
         }
         finally
@@ -338,6 +350,163 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         var cleaned = Regex.Replace(value.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
         return string.IsNullOrWhiteSpace(cleaned) ? "report" : cleaned;
+    }
+
+    private void SaveReportJsonToDisk(string pdfPath, IEnumerable<ResultRow> results, IEnumerable<ReviewTaskRow> reviews)
+    {
+        var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var folder = Path.Combine(docs, "PathoLog", "reports");
+        Directory.CreateDirectory(folder);
+
+        var bytes = File.ReadAllBytes(pdfPath);
+        using var sha = SHA256.Create();
+        var hash = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
+        var hash8 = hash.Length >= 8 ? hash[..8] : hash;
+
+        var date = ExtractDateFromName(Path.GetFileName(pdfPath)) ?? DateTime.Today;
+        var panelSlug = ExtractPanelFromName(Path.GetFileNameWithoutExtension(pdfPath));
+        var patientSlug = Slug(SelectedPatient?.DisplayName ?? "patient");
+        var filename = $"{date:yyyy-MM-dd}_{panelSlug}_{patientSlug}_{hash8}.json";
+
+        var reportId = $"{date:yyyy-MM-dd}_{hash8}_{panelSlug}";
+        var nowUtc = DateTime.UtcNow;
+
+        var output = new
+        {
+            schema_version = "1.0",
+            report = new
+            {
+                report_id = reportId,
+                patient_id = Guid.NewGuid().ToString(),
+                source_file_id = Guid.NewGuid().ToString(),
+                source_pdf_hash = hash,
+                provider = new
+                {
+                    lab_provider_name = (string?)null,
+                    provider_trading_name = (string?)null,
+                    provider_abn = (string?)null,
+                    provider_phone = (string?)null,
+                    provider_website = (string?)null,
+                    nata_numbers = Array.Empty<string>(),
+                    generator_system = (string?)null,
+                    instrument_report_level = (string?)null
+                },
+                patient = new
+                {
+                    external_patient_key = (string?)null,
+                    full_name = SelectedPatient?.DisplayName ?? "Unknown",
+                    dob = (string?)null,
+                    sex = "unknown",
+                    lab_id = (string?)null,
+                    address_text = (string?)null,
+                    phone_text = (string?)null
+                },
+                clinician = new
+                {
+                    referrer_name = (string?)null,
+                    referrer_ref = (string?)null,
+                    copy_to = Array.Empty<object>()
+                },
+                timestamps = new
+                {
+                    requested_date = (string?)null,
+                    collection_datetime_local = (string?)null,
+                    received_datetime_local = (string?)null,
+                    reported_datetime_local = (string?)null,
+                    document_created_datetime_local = (string?)null,
+                    time_zone = (string?)null
+                },
+                report_meta = new
+                {
+                    report_type = "single_panel_table",
+                    panel_name_original = panelSlug,
+                    specimen_original = (string?)null,
+                    page_count = (int?)null,
+                    raw_text_extraction_method = "pdf_text",
+                    raw_text = (string?)null,
+                    parsing_version = "wpf-cli-1.0",
+                    parsing_status = "completed",
+                    extraction_confidence_overall = "medium"
+                },
+                clinical_notes = Array.Empty<object>(),
+                subpanels = Array.Empty<object>(),
+                results = results.Select(r => new
+                {
+                    result_id = Guid.NewGuid().ToString(),
+                    subpanel_id = (string?)null,
+                    analyte_name_original = r.Analyte,
+                    analyte_short_code = Slug(r.Analyte).Replace("-", "").ToUpperInvariant().PadRight(2, 'X').Substring(0, Math.Min(5, Slug(r.Analyte).Length > 0 ? Slug(r.Analyte).Length : 2)),
+                    analyte_code_standard_system = "unknown",
+                    analyte_code_standard_value = (string?)null,
+                    analyte_group = (string?)null,
+                    mapping_method = "generated",
+                    mapping_confidence = "medium",
+                    result_type = "qualitative",
+                    value_numeric = double.TryParse(r.Value, out var d) ? d : (double?)null,
+                    value_text = r.Value,
+                    unit_original = r.Unit,
+                    unit_normalised = r.Unit,
+                    censored = false,
+                    censor_operator = "none",
+                    flag_abnormal = (bool?)null,
+                    flag_severity = "unknown",
+                    reference_range = new
+                    {
+                        ref_low = (double?)null,
+                        ref_high = (double?)null,
+                        ref_text = (string?)null,
+                        reference_range_context = (string?)null
+                    },
+                    collection_context = (string?)null,
+                    specimen = new { specimen_text = (string?)null, specimen_container = (string?)null, preservative = (string?)null },
+                    method = (string?)null,
+                    microbiology = new { organism_name = (string?)null, target_group = (string?)null, target_taxon_rank = (string?)null, detection_status = (string?)null },
+                    narrative = new { morphology_comment = (string?)null, comment_text = (string?)null, comment_scope = (string?)null },
+                    timing = new { collected_datetime_local = (string?)null, reported_datetime_local = (string?)null, lab_number = (string?)null },
+                    audit = new { source_anchor = (string?)null, extraction_confidence = "medium" }
+                }).ToList(),
+                cumulative_series = Array.Empty<object>(),
+                administrative_events = Array.Empty<object>(),
+                review_tasks = reviews.Select(t => new
+                {
+                    review_task_id = Guid.NewGuid().ToString(),
+                    task_type = "unknown",
+                    status = "open",
+                    payload_json = new { detail = t.Reason },
+                    created_at_utc = nowUtc,
+                    resolved_at_utc = (DateTime?)null,
+                    resolved_by_user_id = (string?)null
+                }).ToList()
+            }
+        };
+
+        var json = JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(Path.Combine(folder, filename), json);
+    }
+
+    private static DateTime? ExtractDateFromName(string fileName)
+    {
+        var match = Regex.Match(fileName, @"(?<y>20\d{2})[-_](?<m>\d{2})[-_](?<d>\d{2})");
+        if (match.Success &&
+            int.TryParse(match.Groups["y"].Value, out var y) &&
+            int.TryParse(match.Groups["m"].Value, out var m) &&
+            int.TryParse(match.Groups["d"].Value, out var d))
+        {
+            if (DateTime.TryParse($"{y}-{m}-{d}", out var dt)) return dt;
+        }
+        return null;
+    }
+
+    private static string ExtractPanelFromName(string name)
+    {
+        var withoutDate = Regex.Replace(name, @"^20\d{2}[-_]\d{2}[-_]\d{2}\s*", "", RegexOptions.IgnoreCase).Trim();
+        if (string.IsNullOrWhiteSpace(withoutDate)) return "report";
+
+        var tokens = withoutDate.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "blood", "test", "tests", "results", "for" };
+        var panelTokens = tokens.Take(4).Where(t => !stopWords.Contains(t)).ToList();
+        if (panelTokens.Count == 0) panelTokens = tokens.Take(2).ToList();
+        return Slug(string.Join(" ", panelTokens));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
