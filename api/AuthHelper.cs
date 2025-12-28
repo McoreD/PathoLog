@@ -40,7 +40,11 @@ public static class AuthHelper
                 return null;
             }
 
-            var roles = node["userRoles"]?.AsArray()?.Select(r => r?.ToString()).Where(r => !string.IsNullOrWhiteSpace(r)).ToList()
+            var roles = node["userRoles"]?.AsArray()
+                            ?.Select(r => r?.ToString())
+                            .Where(r => !string.IsNullOrWhiteSpace(r))
+                            .Select(r => r!)
+                            .ToList()
                         ?? new List<string>();
             if (!roles.Contains("authenticated"))
             {

@@ -29,7 +29,7 @@ public class ReportsFunctions
             }
             var reports = await Data.ListReportsForPatient(_cs, user.Id, id);
             var res = req.CreateResponse(HttpStatusCode.OK);
-            await res.WriteAsJsonAsync(new { reports = reports.Select(ToReportResponse) });
+            await res.WriteAsJsonAsync(new { reports = reports.Select(r => ToReportResponse(r)) });
             return res;
         }
         catch (UnauthorizedAccessException)
