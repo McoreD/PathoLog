@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <AssemblyName>PathoLog.Cli</AssemblyName>
     <RootNamespace>PathoLog.Cli</RootNamespace>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
