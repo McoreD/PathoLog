@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
+using PathoLog.Wpf.Services;
 
 namespace PathoLog.Wpf.ViewModels;
 
@@ -15,6 +16,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<ReviewTaskRow> ReviewTasks { get; } = new();
     public ObservableCollection<MappingRow> Mappings { get; } = new();
     public ObservableCollection<TrendSeriesViewModel> Trends { get; } = new();
+    private readonly SettingsStore _settingsStore = new();
+    private AppSettings _settings;
 
     private PatientSummary? _selectedPatient;
     public PatientSummary? SelectedPatient
@@ -59,12 +62,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ICommand SelectPdfCommand { get; }
     public ICommand ImportPdfCommand { get; }
     public ICommand ExportCsvCommand { get; }
+    public ICommand SaveSettingsCommand { get; }
 
     public MainViewModel()
     {
+        _settings = _settingsStore.Load();
         SelectPdfCommand = new RelayCommand(_ => SelectPdf());
         ImportPdfCommand = new RelayCommand(_ => ImportPdf(), _ => !string.IsNullOrWhiteSpace(SelectedFileName));
         ExportCsvCommand = new RelayCommand(_ => ExportCsv());
+        SaveSettingsCommand = new RelayCommand(_ => SaveSettings());
 
         SeedSampleData();
     }
@@ -94,6 +100,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private void ExportCsv()
     {
         ImportStatus = "CSV export queued";
+    }
+
+    public void SaveSettings()
+    {
+        _settingsStore.Save(_settings);
+    }
+
+    public void ReloadSettings()
+    {
+        _settings = _settingsStore.Load();
+        OnPropertyChanged(nameof(OpenAiApiKey));
+        OnPropertyChanged(nameof(GeminiApiKey));
     }
 
     private void SeedSampleData()
@@ -153,6 +171,33 @@ public sealed class MainViewModel : INotifyPropertyChanged
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         return true;
+    }
+
+    public string? OpenAiApiKey
+    {
+        get => _settings.OpenAiApiKey;
+        set
+        {
+            if (value == _settings.OpenAiApiKey) return;
+            _settings.OpenAiApiKey = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string? GeminiApiKey
+    {
+        get => _settings.GeminiApiKey;
+        set
+        {
+            if (value == _settings.GeminiApiKey) return;
+            _settings.GeminiApiKey = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
 
