@@ -291,13 +291,15 @@ export default function App() {
     setBusy(true);
     setDebugInfo(`POST ${API_BASE}/patients`);
     try {
-      await fetchJSON<{ patient: Patient }>("/patients", {
+      const created = await fetchJSON<{ patient: Patient }>("/patients", {
         method: "POST",
         body: JSON.stringify(patientForm),
       });
       setPatientForm({ fullName: "", dob: "", sex: "female" });
       await loadPatients();
       await loadNeedsReview();
+      setSelectedPatientId(created.patient.id);
+      setStatus(`Created patient ${created.patient.fullName}`);
       setDebugInfo("Create patient succeeded");
       setDebugError(null);
     } catch (err) {

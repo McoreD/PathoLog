@@ -14,6 +14,7 @@ import {
   getPatient,
   getReport,
   getReportFile,
+  getAiKey,
   insertResults,
   listAiProviders,
   listNeedsReview,
@@ -35,6 +36,7 @@ import {
 } from "./data.js";
 import { applyMigrations } from "./migrations.js";
 import { query } from "./db.js";
+import { parsePdfWithAi } from "./ai.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
@@ -253,12 +255,26 @@ app.post(
 
     const fileId = await createSourceFile(file.originalname, file.mimetype, file.size, file.buffer);
     const report = await createReport(req.params.patientId, fileId);
-    await updateReportStatus(report.id, "completed");
+    await updateReportStatus(report.id, "pending");
+
+    const openAiKey = await getAiKey(req.user!.id, "openai");
+    const geminiKey = await getAiKey(req.user!.id, "gemini");
+    const parsed = await parsePdfWithAi({
+      buffer: file.buffer,
+      preferredProvider: openAiKey ? "openai" : geminiKey ? "gemini" : "openai",
+      openAiKey,
+      geminiKey,
+    });
+
+    await deleteResultsForReport(report.id);
+    await insertResults(report.id, report.patient_id, parsed.results);
+    const needsReview = parsed.results.some((r) => r.extraction_confidence === "low");
+    await updateReportStatus(report.id, needsReview ? "needs_review" : "completed");
 
     res.status(201).json({
       report: {
         id: report.id,
-        parsingStatus: "completed",
+        parsingStatus: needsReview ? "needs_review" : "completed",
         createdAtUtc: report.created_at,
       },
       sourceFile: {
