@@ -4,14 +4,14 @@
 - App Insights (optional): set `APPINSIGHTS_CONNECTION_STRING` in SWA settings; backend auto-starts Application Insights SDK for requests/logs/metrics.
 - Logs: Pino to stdout; collect via Function logs or App Insights if enabled.
 - Health: `GET /health`.
-- Rate limiting: 300 requests / 15 minutes per IP (config in `backend/src/server.ts`).
+- Rate limiting: 300 requests / 15 minutes per IP (config in `apps/web-ts/backend/src/server.ts`).
 
 ## Storage
 - Files are stored in Postgres `bytea` via the API. Ensure database size limits match expected usage.
 
 ## Database (Neon Postgres)
 - Backups: Neon provides PITR; configure retention in Neon console. For manual snapshots/restore, use branch snapshots.
-- Migrations: applied on backend startup from `backend/sql/*.sql`.
+- Migrations: applied on backend startup from `apps/web-ts/backend/sql/*.sql`.
 
 ## Security
 - Secrets in SWA settings; never commit.
@@ -26,4 +26,4 @@
 
 ## Deployment Notes
 - SWA: set `DATABASE_URL`, optional `APPINSIGHTS_CONNECTION_STRING`.
-- Build commands: backend `npm ci && npm run build`; frontend built by SWA action.
+- Build commands: `apps/web-ts/backend` runs `npm ci && npm run build`; `apps/web-ts/frontend` built by SWA action.

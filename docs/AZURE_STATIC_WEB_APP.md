@@ -1,10 +1,10 @@
 # Azure Static Web App & Neon Postgres setup
 
 ## Frontend (Azure Static Web Apps)
-- Build command: `npm install && npm run build` in `frontend`
-- App location: `frontend`
-- Output location: `frontend/dist`
-- API location: `backend` (SWA integrated API)
+- Build command: `npm install && npm run build` in `apps/web-ts/frontend`
+- App location: `apps/web-ts/frontend`
+- Output location: `apps/web-ts/frontend/dist`
+- API location: `apps/web-ts/backend` (SWA integrated API)
 - In Azure Portal: Static Web App -> Configuration -> Application settings, add:
   - `DATABASE_URL` = Neon Postgres connection string with `sslmode=require`
 - Redeploy/trigger build after saving settings.
@@ -16,4 +16,4 @@
 ## Neon Postgres
 - Create database in Neon Console.
 - Copy connection string (ensure `sslmode=require`) into `DATABASE_URL` app setting.
-- Migrations run on backend startup from `backend/sql/*.sql`.
+- Migrations run on backend startup from `apps/web-ts/backend/sql/*.sql`.

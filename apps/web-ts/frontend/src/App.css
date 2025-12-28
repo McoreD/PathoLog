@@ -1,0 +1,260 @@
+#root {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.9rem;
+  color: var(--page-text);
+}
+
+.subtitle {
+  margin: 0.35rem 0 0;
+  color: var(--page-muted);
+}
+
+.card {
+  border: 1px solid var(--page-border);
+  border-radius: 16px;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, var(--page-surface), var(--page-surface-strong));
+  box-shadow: 0 12px 32px var(--page-shadow);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--page-text);
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--page-border);
+  background: #0b1021;
+  color: var(--page-text);
+}
+
+button,
+.ghost {
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
+}
+
+button {
+  background-image: linear-gradient(120deg, var(--page-accent), var(--page-accent-strong));
+  color: #0b1021;
+  box-shadow: 0 12px 24px rgba(99, 102, 241, 0.25);
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px rgba(99, 102, 241, 0.3);
+}
+
+button.ghost,
+.ghost {
+  background: transparent;
+  color: var(--page-text);
+  border: 1px solid var(--page-border);
+}
+
+button.ghost:hover,
+.ghost:hover {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  list-style: none;
+  padding: 0;
+}
+
+.list-item {
+  text-align: left;
+  border: 1px solid var(--page-border);
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: var(--page-surface-soft);
+  cursor: pointer;
+  color: var(--page-text);
+}
+
+.list-item.active {
+  border-color: rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.list-item .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.muted {
+  color: var(--page-muted);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.status {
+  color: #fda4af;
+  font-weight: 600;
+}
+
+.debug-block {
+  margin-top: 0.75rem;
+  background: #0b1021;
+  border: 1px solid var(--page-border);
+  border-radius: 12px;
+  padding: 0.75rem;
+  color: var(--page-text);
+  max-height: 360px;
+  overflow: auto;
+  font-size: 0.85rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--page-border);
+  padding: 0.75rem 0.5rem;
+  text-align: left;
+}
+
+th {
+  color: var(--page-muted);
+  font-weight: 700;
+}
+
+td input[type="text"] {
+  width: 120px;
+}
+
+.chart-container {
+  width: 100%;
+}
+
+.filters {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.filters .inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+}
+
+.filters .actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+[class^="flag-"],
+[class*=" flag-"] {
+  font-weight: 700;
+}
+.flag-high,
+.flag-critical {
+  color: #f87171;
+}
+.flag-low {
+  color: #60a5fa;
+}
+.flag-borderline {
+  color: #f59e0b;
+}
+
+@media (max-width: 900px) {
+  #root {
+    padding: 1.25rem;
+  }
+
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters .actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  input,
+  select {
+    font-size: 16px;
+  }
+}

@@ -5,16 +5,27 @@
 - npm
 - PostgreSQL running locally (database `patholog` and user with permissions)
 
-## Backend (`backend`)
+## Repository Layout
+- `apps/web-ts` = Vite/React frontend + Node Azure Functions API.
+- `apps/web-csharp` = C# Azure Functions API (from the csharp branch).
+- `apps/wpf` = WPF desktop app (planned).
+- `src/shared-dotnet` = shared C# libraries for `web-csharp` + `wpf` (planned).
+
+## Backend (`apps/web-ts/backend`)
 1. Copy `.env.example` to `.env` and update:
    - `DATABASE_URL`
    - Optional: `ALLOW_ANONYMOUS_AUTH=true` to bypass SWA auth locally.
 2. Install deps: `npm install`
-3. Migrations run on startup from `backend/sql/*.sql`.
+3. Migrations run on startup from `apps/web-ts/backend/sql/*.sql`.
 4. Start dev server: `npm run dev` (defaults to port 4000).
 
-## Frontend (`frontend`)
+## Frontend (`apps/web-ts/frontend`)
 1. Copy `.env.example` to `.env` and set `VITE_API_BASE_URL` if needed (defaults to `/api`).
+2. Install deps: `npm install`
+3. Start dev server: `npm run dev` (Vite default port 5173).
+
+## Frontend (`apps/web-csharp/frontend`)
+1. Copy `.env.example` to `.env` and set `VITE_API_BASE_URL` to point at the C# API if needed.
 2. Install deps: `npm install`
 3. Start dev server: `npm run dev` (Vite default port 5173).
 
