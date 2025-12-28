@@ -489,7 +489,7 @@ export default function App() {
     if (user) {
       return `Welcome, ${user.fullName || user.email}`;
     }
-    return "PathoLog";
+    return "PathoLog (web-csharp)";
   }, [user]);
 
   return (
