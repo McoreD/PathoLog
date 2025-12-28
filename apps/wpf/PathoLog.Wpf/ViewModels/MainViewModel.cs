@@ -36,7 +36,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             if (SetField(ref _selectedPatient, value))
             {
-                LoadSampleReports();
+                Reports.Clear();
+                Results.Clear();
+                OnPropertyChanged(nameof(RecentReportsCount));
             }
         }
     }
@@ -49,7 +51,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             if (SetField(ref _selectedReport, value))
             {
-                LoadSampleResults();
+                Results.Clear();
+                OnPropertyChanged(nameof(RecentReportsCount));
             }
         }
     }
@@ -219,34 +222,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ReviewTasks.Clear();
         Mappings.Clear();
         Trends.Clear();
-    }
-
-    private void LoadSampleReports()
-    {
-        Reports.Clear();
-        Results.Clear();
-
-        if (SelectedPatient is null)
-        {
-            return;
-        }
-
-        Reports.Add(new ReportSummary("R-2025-01", "2025-01-12", "Thyroid Panel"));
-        Reports.Add(new ReportSummary("R-2024-12", "2024-12-05", "Iron Studies"));
-        SelectedReport = Reports.FirstOrDefault();
-    }
-
-    private void LoadSampleResults()
-    {
-        Results.Clear();
-
-        if (SelectedReport is null)
-        {
-            return;
-        }
-
-        Results.Add(new ResultRow("TSH", "1.7", "mIU/L", "Normal"));
-        Results.Add(new ResultRow("FT4", "14.2", "pmol/L", "Normal"));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
