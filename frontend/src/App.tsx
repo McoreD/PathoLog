@@ -73,7 +73,16 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
     const message = text || res.statusText || "Request failed";
     throw new Error(`${res.status} ${message}`);
   }
-  return res.json() as Promise<T>;
+  const text = await res.text();
+  if (!text.trim()) {
+    return {} as T;
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const preview = text.length > 200 ? `${text.slice(0, 200)}...` : text;
+    throw new Error(`Invalid JSON response: ${preview}`);
+  }
 }
 
 function formatDate(input: string | Date) {
