@@ -29,6 +29,11 @@
 2. Install deps: `npm install`
 3. Start dev server: `npm run dev` (Vite default port 5173).
 
+## CLI (`apps/web-ts/backend`)
+- Dry run parse (no DB writes): `npm run cli --workspace apps/web-ts/backend -- --file ./path/to/report.pdf`
+- Save to DB: ensure `DATABASE_URL` is set, then run `npm run cli --workspace apps/web-ts/backend -- --file ./path/to/report.pdf --patient "Name" --email you@example.com --apply`
+- `--show-text` prints the first 800 characters of extracted text; defaults to dry-run for safety.
+
 ## Authentication (SWA Built-in)
 - Sign-in uses `/.auth/login/aad` and `/.auth/login/google` with `/.auth/me`.
 - For local testing, either use the SWA CLI or set `ALLOW_ANONYMOUS_AUTH=true`.
