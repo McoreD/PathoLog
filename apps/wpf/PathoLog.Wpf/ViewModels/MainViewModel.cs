@@ -94,19 +94,21 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public int PendingReviewsCount => ReviewTasks.Count;
     public int MappingCount => Mappings.Count;
     public string ModelInfo => $"Models: OpenAI={OpenAiModel}, Gemini={GeminiModel}";
-    private Uri? _pdfViewerSource;
-    public Uri? PdfViewerSource
+    private static readonly Uri BlankViewerUri = new("about:blank");
+    private Uri _pdfViewerSource = BlankViewerUri;
+    public Uri PdfViewerSource
     {
         get => _pdfViewerSource;
         private set
         {
-            if (Equals(_pdfViewerSource, value)) return;
-            _pdfViewerSource = value;
+            var next = value ?? BlankViewerUri;
+            if (Equals(_pdfViewerSource, next)) return;
+            _pdfViewerSource = next;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasPdfSource));
         }
     }
-    public bool HasPdfSource => PdfViewerSource != null;
+    public bool HasPdfSource => PdfViewerSource != BlankViewerUri;
     public string SelectedAiProviderId
     {
         get => _settings.PreferredAiProvider ?? "openai";
@@ -1098,7 +1100,7 @@ Text:
     {
         Results.Clear();
         ReviewTasks.Clear();
-        PdfViewerSource = null;
+        PdfViewerSource = BlankViewerUri;
         if (string.IsNullOrWhiteSpace(reportId)) return;
         if (_reportPdfPaths.TryGetValue(reportId, out var pdfPath) && File.Exists(pdfPath))
         {
