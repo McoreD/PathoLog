@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -27,6 +28,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly SettingsStore _settingsStore = new();
     private readonly PatientStore _patientStore = new();
     private readonly Dictionary<string, string> _reportJsonPaths = new();
+    private readonly Dictionary<string, string> _reportPdfPaths = new();
     private AppSettings _settings;
     private bool _isImporting;
     private const string OpenAiModel = "gpt-4o";
@@ -88,6 +90,19 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public int PendingReviewsCount => ReviewTasks.Count;
     public int MappingCount => Mappings.Count;
     public string ModelInfo => $"Models: OpenAI={OpenAiModel}, Gemini={GeminiModel}";
+    private Uri? _pdfViewerSource;
+    public Uri? PdfViewerSource
+    {
+        get => _pdfViewerSource;
+        private set
+        {
+            if (Equals(_pdfViewerSource, value)) return;
+            _pdfViewerSource = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasPdfSource));
+        }
+    }
+    public bool HasPdfSource => PdfViewerSource != null;
     public string SelectedAiProviderId
     {
         get => _settings.PreferredAiProvider ?? "openai";
@@ -198,6 +213,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
                 var jsonPath = SaveReportJsonToDisk(file, parsedResults, parsedReviews);
                 _reportJsonPaths[report.Id] = jsonPath;
+                _reportPdfPaths[report.Id] = file;
                 ApplyReportData(report.Id);
             }
         }
@@ -527,7 +543,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         Results.Clear();
         ReviewTasks.Clear();
+        PdfViewerSource = null;
         if (string.IsNullOrWhiteSpace(reportId)) return;
+        if (_reportPdfPaths.TryGetValue(reportId, out var pdfPath) && File.Exists(pdfPath))
+        {
+            PdfViewerSource = new Uri(pdfPath, UriKind.Absolute);
+        }
         if (!_reportJsonPaths.TryGetValue(reportId, out var path) || !File.Exists(path)) return;
 
         try
@@ -618,31 +639,48 @@ public sealed class RelayCommand : ICommand
 
 public sealed class ParsedReportWrapper
 {
-    public string? Schema_Version { get; set; }
+    [JsonPropertyName("schema_version")]
+    public string? SchemaVersion { get; set; }
+
+    [JsonPropertyName("report")]
     public ParsedReportJson? Report { get; set; }
 }
 
 public sealed class ParsedReportJson
 {
+    [JsonPropertyName("report_id")]
     public string? ReportId { get; set; }
+
+    [JsonPropertyName("results")]
     public ParsedResultJson[]? Results { get; set; }
+
+    [JsonPropertyName("review_tasks")]
     public ParsedReviewTaskJson[]? ReviewTasks { get; set; }
 }
 
 public sealed class ParsedResultJson
 {
+    [JsonPropertyName("analyte_name_original")]
     public string? AnalyteNameOriginal { get; set; }
+    [JsonPropertyName("analyte_short_code")]
     public string? AnalyteShortCode { get; set; }
+    [JsonPropertyName("value_text")]
     public string? ValueText { get; set; }
+    [JsonPropertyName("value_numeric")]
     public double? ValueNumeric { get; set; }
+    [JsonPropertyName("unit_original")]
     public string? UnitOriginal { get; set; }
+    [JsonPropertyName("unit_normalised")]
     public string? UnitNormalised { get; set; }
+    [JsonPropertyName("extraction_confidence")]
     public string? ExtractionConfidence { get; set; }
 }
 
 public sealed class ParsedReviewTaskJson
 {
+    [JsonPropertyName("field_path")]
     public string? FieldPath { get; set; }
+    [JsonPropertyName("reason")]
     public string? Reason { get; set; }
 }
 
