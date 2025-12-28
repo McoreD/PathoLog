@@ -307,15 +307,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
         try
         {
             var json = File.ReadAllText(dialog.FileName);
-            var parsed = JsonSerializer.Deserialize<ParsedReportJson>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (parsed is null)
+            var parsed = JsonSerializer.Deserialize<ParsedReportWrapper>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (parsed?.Report is null)
             {
                 ImportStatus = "Failed to load report JSON";
                 return;
             }
 
             Results.Clear();
-            foreach (var r in parsed.Results ?? Array.Empty<ParsedResultJson>())
+            foreach (var r in parsed.Report.Results ?? Array.Empty<ParsedResultJson>())
             {
                 Results.Add(new ResultRow(
                     r.AnalyteNameOriginal ?? r.AnalyteShortCode ?? "Analyte",
@@ -325,7 +325,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             }
 
             ReviewTasks.Clear();
-            foreach (var t in parsed.ReviewTasks ?? Array.Empty<ParsedReviewTaskJson>())
+            foreach (var t in parsed.Report.ReviewTasks ?? Array.Empty<ParsedReviewTaskJson>())
             {
                 ReviewTasks.Add(new ReviewTaskRow(t.FieldPath ?? "field", t.Reason ?? "needs review"));
             }
@@ -407,6 +407,12 @@ public sealed class RelayCommand : ICommand
         add => CommandManager.RequerySuggested += value;
         remove => CommandManager.RequerySuggested -= value;
     }
+}
+
+public sealed class ParsedReportWrapper
+{
+    public string? Schema_Version { get; set; }
+    public ParsedReportJson? Report { get; set; }
 }
 
 public sealed class ParsedReportJson

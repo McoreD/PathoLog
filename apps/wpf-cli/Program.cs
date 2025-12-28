@@ -79,17 +79,146 @@ internal static class Program
         var fileHash = ComputeSha256(File.ReadAllBytes(filePath));
         var contentFingerprint = ComputeSha256(Encoding.UTF8.GetBytes(text + "|" + parsed.results.Count));
 
+        var panelSlug = ExtractPanelFromName(Path.GetFileNameWithoutExtension(filePath));
+        var patientSlug = Slugify(patientName);
+        var dateForId = ExtractDateFromName(Path.GetFileName(filePath)) ?? DateTime.Today;
+        var hash8 = fileHash.Length >= 8 ? fileHash[..8] : fileHash;
+        var reportId = $"{dateForId:yyyy-MM-dd}_{hash8}_{panelSlug}";
+
+        var nowUtc = DateTime.UtcNow;
+
         var output = new
         {
-            schema_version = "cli-1.0",
-            patient = new { name = patientName, email },
-            source = new { file = filePath, pages, text_length = text.Length },
-            parsing = new { status = "completed", confidence = InferOverallConfidence(parsed.results) },
-            raw_text = text,
-            results = parsed.results,
-            review_tasks = parsed.reviewTasks,
-            file_hash_sha256 = fileHash,
-            content_fingerprint_sha256 = contentFingerprint
+            schema_version = "1.0",
+            report = new
+            {
+                report_id = reportId,
+                patient_id = Guid.NewGuid().ToString(),
+                source_file_id = Guid.NewGuid().ToString(),
+                source_pdf_hash = fileHash,
+                provider = new
+                {
+                    lab_provider_name = (string?)null,
+                    provider_trading_name = (string?)null,
+                    provider_abn = (string?)null,
+                    provider_phone = (string?)null,
+                    provider_website = (string?)null,
+                    nata_numbers = Array.Empty<string>(),
+                    generator_system = (string?)null,
+                    instrument_report_level = (string?)null
+                },
+                patient = new
+                {
+                    external_patient_key = (string?)null,
+                    full_name = patientName,
+                    dob = (string?)null,
+                    sex = "unknown",
+                    lab_id = (string?)null,
+                    address_text = (string?)null,
+                    phone_text = (string?)null
+                },
+                clinician = new
+                {
+                    referrer_name = (string?)null,
+                    referrer_ref = (string?)null,
+                    copy_to = Array.Empty<object>()
+                },
+                timestamps = new
+                {
+                    requested_date = (string?)null,
+                    collection_datetime_local = (string?)null,
+                    received_datetime_local = (string?)null,
+                    reported_datetime_local = (string?)null,
+                    document_created_datetime_local = (string?)null,
+                    time_zone = (string?)null
+                },
+                report_meta = new
+                {
+                    report_type = "single_panel_table",
+                    panel_name_original = panelSlug,
+                    specimen_original = (string?)null,
+                    page_count = pages,
+                    raw_text_extraction_method = text.Length > 0 ? "pdf_text" : "ocr",
+                    raw_text = text,
+                    parsing_version = "cli-1.0",
+                    parsing_status = "completed",
+                    extraction_confidence_overall = InferOverallConfidence(parsed.results)
+                },
+                clinical_notes = Array.Empty<object>(),
+                subpanels = Array.Empty<object>(),
+                results = parsed.results.Select(r => new
+                {
+                    result_id = Guid.NewGuid().ToString(),
+                    subpanel_id = (string?)null,
+                    analyte_name_original = r.AnalyteNameOriginal ?? "Analyte",
+                    analyte_short_code = r.AnalyteShortCode,
+                    analyte_code_standard_system = "unknown",
+                    analyte_code_standard_value = (string?)null,
+                    analyte_group = (string?)null,
+                    mapping_method = "generated",
+                    mapping_confidence = r.ExtractionConfidence ?? "medium",
+                    result_type = r.ResultType,
+                    value_numeric = r.ValueNumeric,
+                    value_text = r.ValueText,
+                    unit_original = r.UnitOriginal,
+                    unit_normalised = r.UnitNormalised,
+                    censored = false,
+                    censor_operator = "none",
+                    flag_abnormal = (bool?)null,
+                    flag_severity = "unknown",
+                    reference_range = new
+                    {
+                        ref_low = (double?)null,
+                        ref_high = (double?)null,
+                        ref_text = (string?)null,
+                        reference_range_context = (string?)null
+                    },
+                    collection_context = (string?)null,
+                    specimen = new
+                    {
+                        specimen_text = (string?)null,
+                        specimen_container = (string?)null,
+                        preservative = (string?)null
+                    },
+                    method = (string?)null,
+                    microbiology = new
+                    {
+                        organism_name = (string?)null,
+                        target_group = (string?)null,
+                        target_taxon_rank = (string?)null,
+                        detection_status = (string?)null
+                    },
+                    narrative = new
+                    {
+                        morphology_comment = (string?)null,
+                        comment_text = (string?)null,
+                        comment_scope = (string?)null
+                    },
+                    timing = new
+                    {
+                        collected_datetime_local = (string?)null,
+                        reported_datetime_local = (string?)null,
+                        lab_number = (string?)null
+                    },
+                    audit = new
+                    {
+                        source_anchor = (string?)null,
+                        extraction_confidence = r.ExtractionConfidence ?? "medium"
+                    }
+                }).ToList(),
+                cumulative_series = Array.Empty<object>(),
+                administrative_events = Array.Empty<object>(),
+                review_tasks = parsed.reviewTasks.Select(t => new
+                {
+                    review_task_id = Guid.NewGuid().ToString(),
+                    task_type = "unknown",
+                    status = "open",
+                    payload_json = new { detail = t.Reason },
+                    created_at_utc = nowUtc,
+                    resolved_at_utc = (DateTime?)null,
+                    resolved_by_user_id = (string?)null
+                }).ToList()
+            }
         };
 
         var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -531,7 +660,7 @@ Text:
 
     private static DateTime? ExtractDateFromName(string fileName)
     {
-        var match = Regex.Match(fileName, @"(?<y>20\\d{2})[-_](?<m>\\d{2})[-_](?<d>\\d{2})");
+        var match = Regex.Match(fileName, @"(?<y>20\d{2})[-_](?<m>\d{2})[-_](?<d>\d{2})");
         if (match.Success &&
             int.TryParse(match.Groups["y"].Value, out var y) &&
             int.TryParse(match.Groups["m"].Value, out var m) &&
@@ -544,7 +673,7 @@ Text:
 
     private static string ExtractPanelFromName(string name)
     {
-        var withoutDate = Regex.Replace(name, @"^20\\d{2}[-_]\\d{2}[-_]\\d{2}\\s*", "", RegexOptions.IgnoreCase).Trim();
+        var withoutDate = Regex.Replace(name, @"^20\d{2}[-_]\d{2}[-_]\d{2}\s*", "", RegexOptions.IgnoreCase).Trim();
         if (string.IsNullOrWhiteSpace(withoutDate)) return "report";
 
         var tokens = withoutDate.Split(' ', StringSplitOptions.RemoveEmptyEntries);
