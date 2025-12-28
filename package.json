@@ -4,7 +4,6 @@
   "private": true,
   "description": "PathoLog web app for structured pathology report ingestion and trending",
   "workspaces": [
-    "backend",
     "frontend"
   ],
   "scripts": {

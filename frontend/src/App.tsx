@@ -304,6 +304,18 @@ export default function App() {
     }
   };
 
+  const fileToBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === "string" ? reader.result : "";
+        const base64 = result.split(",")[1] || "";
+        resolve(base64);
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
   const uploadReport = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedPatientId) {
@@ -318,17 +330,15 @@ export default function App() {
     }
     setBusy(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`${API_BASE}/patients/${selectedPatientId}/reports`, {
+      const contentBase64 = await fileToBase64(file);
+      await fetchJSON(`/patients/${selectedPatientId}/reports`, {
         method: "POST",
-        body: formData,
-        credentials: "include",
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type || "application/pdf",
+          contentBase64,
+        }),
       });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "Upload failed");
-      }
       setStatus("Upload saved");
       await loadReports(selectedPatientId);
       await loadResults(selectedPatientId);
