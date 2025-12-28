@@ -60,7 +60,8 @@ const linkGoogleUrl = `/.auth/login/google?post_login_redirect_uri=${encodeURICo
 const logoutUrl = `/.auth/logout?post_logout_redirect_uri=${encodeURIComponent(authReturnUrl)}`;
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
@@ -70,8 +71,10 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    const message = text || res.statusText || "Request failed";
-    throw new Error(`${res.status} ${message}`);
+    const requestId = res.headers.get("x-ms-request-id") || res.headers.get("x-ms-client-request-id");
+    const message = text.trim() ? text : "(empty response body)";
+    const suffix = requestId ? ` request-id=${requestId}` : "";
+    throw new Error(`${res.status} ${message} (${url})${suffix}`);
   }
   const text = await res.text();
   if (!text.trim()) {
