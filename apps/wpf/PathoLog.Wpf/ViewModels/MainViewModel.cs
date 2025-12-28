@@ -24,6 +24,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<MappingRow> Mappings { get; } = new();
     public ObservableCollection<TrendSeriesViewModel> Trends { get; } = new();
     private readonly SettingsStore _settingsStore = new();
+    private readonly PatientStore _patientStore = new();
     private AppSettings _settings;
     private bool _isImporting;
 
@@ -90,7 +91,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         NewPatientCommand = new RelayCommand(_ => CreatePatient());
         LoadReportJsonCommand = new RelayCommand(_ => LoadReportJson());
 
-        SeedSampleData();
+        LoadPatientsFromStore();
     }
 
     private void SelectPdf()
@@ -193,19 +194,30 @@ public sealed class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(GeminiApiKey));
     }
 
-    private void SeedSampleData()
+    private void LoadPatientsFromStore()
     {
-        Patients.Add(new PatientSummary("P-001", "Alex Morgan"));
-        Patients.Add(new PatientSummary("P-002", "Sam Torres"));
-        Patients.Add(new PatientSummary("P-003", "Jordan Lee"));
+        Patients.Clear();
+        foreach (var p in _patientStore.ListPatients())
+        {
+            Patients.Add(new PatientSummary(p.Id, p.FullName));
+        }
+        if (Patients.Count == 0)
+        {
+            var p = _patientStore.AddPatient("Local Patient", null, "unknown");
+            Patients.Add(new PatientSummary(p.Id, p.FullName));
+        }
         SelectedPatient = Patients.FirstOrDefault();
 
+        // demo static mappings/trends unchanged
+        ReviewTasks.Clear();
         ReviewTasks.Add(new ReviewTaskRow("results[0].value_number", "Low confidence value"));
         ReviewTasks.Add(new ReviewTaskRow("report.panel_name", "Low confidence value"));
 
+        Mappings.Clear();
         Mappings.Add(new MappingRow("Thyroid Stimulating Hormone", "TSH", "UserConfirmed"));
         Mappings.Add(new MappingRow("Free T4", "FT4", "Deterministic"));
 
+        Trends.Clear();
         Trends.Add(new TrendSeriesViewModel("TSH", new[] { 0.8, 1.2, 2.1, 1.7 }, new[] { 0.0, 1.0, 2.0, 3.0 }));
         Trends.Add(new TrendSeriesViewModel("HbA1c", new[] { 5.8, 6.2, 6.0, 5.9 }, new[] { 0.0, 1.0, 2.0, 3.0 }));
     }
@@ -261,8 +273,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         var result = dialog.ShowDialog();
         if (result == true && !string.IsNullOrWhiteSpace(dialog.PatientName))
         {
-            var id = $"P-{DateTime.Now:yyyyMMddHHmmss}";
-            var patient = new PatientSummary(id, dialog.PatientName!);
+            var record = _patientStore.AddPatient(dialog.PatientName!, null, "unknown");
+            var patient = new PatientSummary(record.Id, record.FullName);
             Patients.Insert(0, patient);
             SelectedPatient = patient;
             ImportStatus = $"Created patient {dialog.PatientName}";
