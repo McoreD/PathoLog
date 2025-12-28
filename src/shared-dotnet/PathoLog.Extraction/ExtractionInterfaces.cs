@@ -26,3 +26,26 @@ public interface ITableDetector
 {
     Task<IReadOnlyList<string>> DetectTablesAsync(string extractedText, CancellationToken cancellationToken = default);
 }
+
+public sealed class ExtractionRequest
+{
+    public string ExtractedText { get; set; } = string.Empty;
+    public string? FileName { get; set; }
+    public string? FileHashSha256 { get; set; }
+    public int? PageCount { get; set; }
+}
+
+public interface IExtractionModelClient
+{
+    Task<PathoLog.Contracts.Dtos.ExtractionDocumentDto> ExtractAsync(
+        ExtractionRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IExtractionPipeline
+{
+    Task<PathoLog.Contracts.Dtos.ExtractionDocumentDto> ExtractAsync(
+        Stream pdfStream,
+        string fileName,
+        CancellationToken cancellationToken = default);
+}

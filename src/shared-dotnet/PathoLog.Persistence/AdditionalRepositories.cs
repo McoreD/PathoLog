@@ -19,3 +19,9 @@ public interface IReferenceRangeRepository
     Task<ReferenceRange?> GetByResultAsync(Guid resultId, CancellationToken cancellationToken = default);
     Task UpsertAsync(ReferenceRange referenceRange, CancellationToken cancellationToken = default);
 }
+
+public interface IAdministrativeEventRepository
+{
+    Task<IReadOnlyList<AdministrativeEvent>> ListByPatientAsync(Guid patientId, CancellationToken cancellationToken = default);
+    Task UpsertAsync(AdministrativeEvent administrativeEvent, CancellationToken cancellationToken = default);
+}

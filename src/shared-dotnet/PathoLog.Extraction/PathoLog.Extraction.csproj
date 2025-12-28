@@ -1,5 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <ProjectReference Include="..\PathoLog.Contracts\PathoLog.Contracts.csproj" />
+    <ProjectReference Include="..\PathoLog.Domain\PathoLog.Domain.csproj" />
+    <ProjectReference Include="..\PathoLog.Persistence\PathoLog.Persistence.csproj" />
+    <ProjectReference Include="..\PathoLog.Mapping\PathoLog.Mapping.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+    <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
