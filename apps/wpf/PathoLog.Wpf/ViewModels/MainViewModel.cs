@@ -212,11 +212,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             Patients.Add(new PatientSummary(p.Id, p.FullName));
         }
-        if (Patients.Count == 0)
-        {
-            var p = _patientStore.AddPatient("Local Patient", null, "unknown");
-            Patients.Add(new PatientSummary(p.Id, p.FullName));
-        }
         SelectedPatient = Patients.FirstOrDefault();
 
         ReviewTasks.Clear();
