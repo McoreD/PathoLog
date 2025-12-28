@@ -55,4 +55,5 @@ public sealed class AppSettings
 {
     public string? OpenAiApiKey { get; set; }
     public string? GeminiApiKey { get; set; }
+    public string? PreferredAiProvider { get; set; }
 }

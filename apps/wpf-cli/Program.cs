@@ -372,7 +372,7 @@ internal static class Program
 
             var prompt = new
             {
-                model = "gpt-4.1",
+                model = "gpt-4o",
                 temperature = 0.1,
                 messages = new object[]
                 {
@@ -532,7 +532,7 @@ Text:
             };
 
             var resp = await client.PostAsync(
-                $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={apiKey}",
+                $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={apiKey}",
                 new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();

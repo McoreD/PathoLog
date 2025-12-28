@@ -28,6 +28,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly PatientStore _patientStore = new();
     private AppSettings _settings;
     private bool _isImporting;
+    private const string OpenAiModel = "gpt-4o";
+    private const string GeminiModel = "gemini-2.5-pro";
+    public ObservableCollection<AiOption> AiProviders { get; } = new();
 
     private PatientSummary? _selectedPatient;
     public PatientSummary? SelectedPatient
@@ -83,6 +86,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public int RecentReportsCount => Reports.Count;
     public int PendingReviewsCount => ReviewTasks.Count;
     public int MappingCount => Mappings.Count;
+    public string ModelInfo => $"Models: OpenAI={OpenAiModel}, Gemini={GeminiModel}";
+    public string SelectedAiProviderId
+    {
+        get => _settings.PreferredAiProvider ?? "openai";
+        set
+        {
+            if (value == _settings.PreferredAiProvider) return;
+            _settings.PreferredAiProvider = value;
+            OnPropertyChanged();
+        }
+    }
 
     public MainViewModel()
     {
@@ -93,6 +107,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         SaveSettingsCommand = new RelayCommand(_ => SaveSettings());
         NewPatientCommand = new RelayCommand(_ => CreatePatient());
         LoadReportJsonCommand = new RelayCommand(_ => LoadReportJson());
+
+        AiProviders.Add(new AiOption("openai", $"OpenAI ({OpenAiModel})"));
+        AiProviders.Add(new AiOption("gemini", $"Gemini ({GeminiModel})"));
 
         Reports.CollectionChanged += (_, __) => OnPropertyChanged(nameof(RecentReportsCount));
         ReviewTasks.CollectionChanged += (_, __) => OnPropertyChanged(nameof(PendingReviewsCount));
@@ -595,3 +612,5 @@ public sealed class ParsedReviewTaskJson
     public string? FieldPath { get; set; }
     public string? Reason { get; set; }
 }
+
+public sealed record AiOption(string Id, string Label);
