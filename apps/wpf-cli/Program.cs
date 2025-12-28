@@ -370,39 +370,126 @@ internal static class Program
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-            var prompt = new
+            var pass1Prompt = new
             {
                 model = "gpt-4o",
                 temperature = 0.1,
                 messages = new object[]
                 {
-                    new { role = "system", content = "You are a pathology report parser. Extract performed analytes and results. Use the provided JSON schema. Do not hallucinate missing values." },
+                    new { role = "system", content = "You are parsing an Australian pathology PDF report." },
                     new
                     {
                         role = "user",
-                        content = $@"Extract results from this report text. Return strict JSON only.
+                        content = $@"Task
+1. Classify the report type. Choose one
+blood_chemistry
+haematology
+endocrine
+immunology
+microbiology_pcr
+microbiology_culture
+urine
+faeces
+histology
+administrative_only
+
+2. Identify the main results table or list. Return page number and the exact header text above it.
+
+3. Extract patient identifiers and report timestamps.
+
+4. Return a short glossary of analytes or targets found. Keep original spelling.
+
+Rules
+- Output JSON only.
+- If a field is not present, use null.
+- Provide source_anchor values like page_1_table_iron_studies or page_2_section_microbiology.
+
+Text:
+{text}"
+                    }
+                }
+            };
+
+            string? pass1Json = null;
+            try
+            {
+                var pass1Resp = await client.PostAsync(
+                    "https://api.openai.com/v1/chat/completions",
+                    new StringContent(JsonSerializer.Serialize(pass1Prompt), Encoding.UTF8, "application/json"));
+                pass1Resp.EnsureSuccessStatusCode();
+                var pass1Raw = await pass1Resp.Content.ReadAsStringAsync();
+                using var pass1Doc = JsonDocument.Parse(pass1Raw);
+                pass1Json = pass1Doc.RootElement
+                    .GetProperty("choices")[0]
+                    .GetProperty("message")
+                    .GetProperty("content")
+                    .GetString();
+            }
+            catch
+            {
+                pass1Json = null;
+            }
+
+            var pass2Prompt = new
+            {
+                model = "gpt-4o",
+                temperature = 0.1,
+                messages = new object[]
+                {
+                    new { role = "system", content = "You are extracting structured pathology results from an Australian lab PDF." },
+                    new
+                    {
+                        role = "user",
+                        content = $@"Context
+This report is of type <report_type_from_pass_1>. It may contain
+- results in tables with columns like Test Result Units Reference range Flag
+- multiple subpanels on one report
+- cumulative tables with historical rows
+- microbiology targets with Detected or Not Detected
+- narrative comments or specimen notes
+- tests not performed
+
+Pass 1 JSON:
+{pass1Json ?? "null"}
+
+Task
+Populate this JSON schema exactly. Do not add keys. Do not rename keys.
+For each result row, capture
+- analyte_name_original exactly as printed
+- unit_original exactly as printed
+- reference range exactly as printed
+- abnormal flags if shown
+- detection status for microbiology
+- censored values like < 0.03 using censored=true and censor_operator=lt
+- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence.
+
+Output requirements
+- JSON only
+- Keep numeric values as numbers
+- Keep value_text as the exact printed text
+- source_anchor per row and per section
+- extraction_confidence per row
+- If a requested test was not performed, add an administrative_event and do not invent results.
+
 Schema:
 {{
   ""results"": [
     {{
       ""analyte_name_original"": string,
-      ""analyte_short_code"": string (2-5 letters, required; derive from name if missing),
+      ""analyte_short_code"": string,
       ""result_type"": ""numeric"" | ""qualitative"",
       ""value_numeric"": number | null,
       ""value_text"": string | null,
       ""unit_original"": string | null,
-      ""extraction_confidence"": ""high"" | ""medium"" | ""low""
+      ""extraction_confidence"": ""high"" | ""medium"" | ""low"",
+      ""source_anchor"": string | null
     }}
   ],
   ""review_tasks"": [
     {{ ""field_path"": string, ""reason"": string }}
   ]
 }}
-Rules:
-- Prefer numeric values and units where present; include qualitative rows when numeric is absent.
-- Do not invent analytes; only return those present in text.
-- If unit is missing, keep it null and add a review task ""unit missing"".
-- If confidence is low, add a review task for that analyte.
+
 Text:
 {text}"
                     }
@@ -411,7 +498,7 @@ Text:
 
             var resp = await client.PostAsync(
                 "https://api.openai.com/v1/chat/completions",
-                new StringContent(JsonSerializer.Serialize(prompt), Encoding.UTF8, "application/json"));
+                new StringContent(JsonSerializer.Serialize(pass2Prompt), Encoding.UTF8, "application/json"));
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
@@ -487,7 +574,7 @@ Text:
         try
         {
             using var client = new HttpClient();
-            var payload = new
+            var pass1Payload = new
             {
                 contents = new[]
                 {
@@ -499,29 +586,126 @@ Text:
                             new
                             {
                                 text =
-$@"Extract results from this report text. Return strict JSON only.
+$@"You are parsing an Australian pathology PDF report.
+
+Task
+1. Classify the report type. Choose one
+blood_chemistry
+haematology
+endocrine
+immunology
+microbiology_pcr
+microbiology_culture
+urine
+faeces
+histology
+administrative_only
+
+2. Identify the main results table or list. Return page number and the exact header text above it.
+
+3. Extract patient identifiers and report timestamps.
+
+4. Return a short glossary of analytes or targets found. Keep original spelling.
+
+Rules
+- Output JSON only.
+- If a field is not present, use null.
+- Provide source_anchor values like page_1_table_iron_studies or page_2_section_microbiology.
+
+Text:
+{text}"
+                            }
+                        }
+                    }
+                },
+                generationConfig = new { temperature = 0.1 }
+            };
+
+            string? pass1Json = null;
+            try
+            {
+                var pass1Resp = await client.PostAsync(
+                    $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={apiKey}",
+                    new StringContent(JsonSerializer.Serialize(pass1Payload), Encoding.UTF8, "application/json"));
+                pass1Resp.EnsureSuccessStatusCode();
+                var pass1Raw = await pass1Resp.Content.ReadAsStringAsync();
+                using var pass1Doc = JsonDocument.Parse(pass1Raw);
+                pass1Json = pass1Doc.RootElement
+                    .GetProperty("candidates")[0]
+                    .GetProperty("content")
+                    .GetProperty("parts")[0]
+                    .GetProperty("text")
+                    .GetString();
+            }
+            catch
+            {
+                pass1Json = null;
+            }
+
+            var pass2Payload = new
+            {
+                contents = new[]
+                {
+                    new
+                    {
+                        role = "user",
+                        parts = new[]
+                        {
+                            new
+                            {
+                                text =
+$@"You are extracting structured pathology results from an Australian lab PDF.
+
+Context
+This report is of type <report_type_from_pass_1>. It may contain
+- results in tables with columns like Test Result Units Reference range Flag
+- multiple subpanels on one report
+- cumulative tables with historical rows
+- microbiology targets with Detected or Not Detected
+- narrative comments or specimen notes
+- tests not performed
+
+Pass 1 JSON:
+{pass1Json ?? "null"}
+
+Task
+Populate this JSON schema exactly. Do not add keys. Do not rename keys.
+For each result row, capture
+- analyte_name_original exactly as printed
+- unit_original exactly as printed
+- reference range exactly as printed
+- abnormal flags if shown
+- detection status for microbiology
+- censored values like < 0.03 using censored=true and censor_operator=lt
+- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence.
+
+Output requirements
+- JSON only
+- Keep numeric values as numbers
+- Keep value_text as the exact printed text
+- source_anchor per row and per section
+- extraction_confidence per row
+- If a requested test was not performed, add an administrative_event and do not invent results.
+
 Schema:
 {{
   ""results"": [
     {{
       ""analyte_name_original"": string,
-      ""analyte_short_code"": string (2-5 letters, required; derive from name if missing),
+      ""analyte_short_code"": string,
       ""result_type"": ""numeric"" | ""qualitative"",
       ""value_numeric"": number | null,
       ""value_text"": string | null,
       ""unit_original"": string | null,
-      ""extraction_confidence"": ""high"" | ""medium"" | ""low""
+      ""extraction_confidence"": ""high"" | ""medium"" | ""low"",
+      ""source_anchor"": string | null
     }}
   ],
   ""review_tasks"": [
     {{ ""field_path"": string, ""reason"": string }}
   ]
 }}
-Rules:
-- Prefer numeric values and units where present; include qualitative rows when numeric is absent.
-- Do not invent analytes; only return those present in text.
-- If unit is missing, keep it null and add a review task ""unit missing"".
-- If confidence is low, add a review task for that analyte.
+
 Text:
 {text}"
                             }
@@ -533,7 +717,7 @@ Text:
 
             var resp = await client.PostAsync(
                 $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={apiKey}",
-                new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
+                new StringContent(JsonSerializer.Serialize(pass2Payload), Encoding.UTF8, "application/json"));
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
