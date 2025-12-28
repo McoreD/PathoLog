@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
 using PathoLog.Wpf.Services;
+using PathoLog.Wpf.Dialogs;
 
 namespace PathoLog.Wpf.ViewModels;
 
@@ -63,6 +64,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ICommand ImportPdfCommand { get; }
     public ICommand ExportCsvCommand { get; }
     public ICommand SaveSettingsCommand { get; }
+    public ICommand NewPatientCommand { get; }
 
     public MainViewModel()
     {
@@ -71,6 +73,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ImportPdfCommand = new RelayCommand(_ => ImportPdf(), _ => !string.IsNullOrWhiteSpace(SelectedFileName));
         ExportCsvCommand = new RelayCommand(_ => ExportCsv());
         SaveSettingsCommand = new RelayCommand(_ => SaveSettings());
+        NewPatientCommand = new RelayCommand(_ => CreatePatient());
 
         SeedSampleData();
     }
@@ -95,6 +98,21 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ImportStatus = string.IsNullOrWhiteSpace(SelectedFileName)
             ? "Select a PDF to import"
             : $"Queued import for {System.IO.Path.GetFileName(SelectedFileName)}";
+
+        if (string.IsNullOrWhiteSpace(SelectedFileName) || SelectedPatient is null)
+        {
+            return;
+        }
+
+        var reportId = $"R-{DateTime.Now:yyyyMMddHHmmss}";
+        var report = new ReportSummary(reportId, DateTime.Now.ToString("yyyy-MM-dd"), System.IO.Path.GetFileName(SelectedFileName));
+        Reports.Insert(0, report);
+        SelectedReport = report;
+
+        Results.Clear();
+        Results.Add(new ResultRow("Uploaded PDF", "Pending parse", SelectedFileName, "Queued"));
+
+        ImportStatus = $"Import queued for {SelectedFileName}";
     }
 
     private void ExportCsv()
@@ -171,6 +189,23 @@ public sealed class MainViewModel : INotifyPropertyChanged
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         return true;
+    }
+
+    private void CreatePatient()
+    {
+        var dialog = new NewPatientWindow
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+        var result = dialog.ShowDialog();
+        if (result == true && !string.IsNullOrWhiteSpace(dialog.PatientName))
+        {
+            var id = $"P-{DateTime.Now:yyyyMMddHHmmss}";
+            var patient = new PatientSummary(id, dialog.PatientName!);
+            Patients.Insert(0, patient);
+            SelectedPatient = patient;
+            ImportStatus = $"Created patient {dialog.PatientName}";
+        }
     }
 
     public string? OpenAiApiKey
