@@ -85,6 +85,9 @@
                             <ListBoxItem Content="4. Review low confidence" />
                             <ListBoxItem Content="5. Save report" />
                         </ListBox>
+                        <Separator Margin="0,8,0,8"/>
+                        <TextBlock Text="Load parsed JSON" FontWeight="Bold" Margin="0,0,0,6" />
+                        <Button Content="Load report JSON" Command="{Binding LoadReportJsonCommand}" />
                     </StackPanel>
 
                     <StackPanel Grid.Column="1" Margin="16,0,0,0">

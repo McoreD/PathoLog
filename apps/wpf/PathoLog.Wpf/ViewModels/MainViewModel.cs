@@ -1,6 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -73,6 +78,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ICommand ExportCsvCommand { get; }
     public ICommand SaveSettingsCommand { get; }
     public ICommand NewPatientCommand { get; }
+    public ICommand LoadReportJsonCommand { get; }
 
     public MainViewModel()
     {
@@ -82,6 +88,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ExportCsvCommand = new RelayCommand(_ => ExportCsv());
         SaveSettingsCommand = new RelayCommand(_ => SaveSettings());
         NewPatientCommand = new RelayCommand(_ => CreatePatient());
+        LoadReportJsonCommand = new RelayCommand(_ => LoadReportJson());
 
         SeedSampleData();
     }
@@ -152,7 +159,26 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private void ExportCsv()
     {
-        ImportStatus = "CSV export queued";
+        var saveDialog = new SaveFileDialog
+        {
+            Filter = "CSV files (*.csv)|*.csv",
+            FileName = BuildFileName("report", "patient", DateTime.Today, "csv")
+        };
+        if (saveDialog.ShowDialog() == true)
+        {
+            var csv = new StringBuilder();
+            csv.AppendLine("Analyte,Value,Unit,Flag");
+            foreach (var r in Results)
+            {
+                csv.AppendLine($"{r.Analyte},{r.Value},{r.Unit},{r.Flag}");
+            }
+            File.WriteAllText(saveDialog.FileName, csv.ToString());
+            ImportStatus = $"Exported CSV to {saveDialog.FileName}";
+        }
+        else
+        {
+            ImportStatus = "Export cancelled";
+        }
     }
 
     public void SaveSettings()
@@ -265,6 +291,66 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    private void LoadReportJson()
+    {
+        var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var defaultDir = Path.Combine(docs, "PathoLog", "reports");
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Report JSON (*.json)|*.json",
+            InitialDirectory = Directory.Exists(defaultDir) ? defaultDir : docs,
+            Title = "Select parsed report JSON"
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            var json = File.ReadAllText(dialog.FileName);
+            var parsed = JsonSerializer.Deserialize<ParsedReportJson>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (parsed is null)
+            {
+                ImportStatus = "Failed to load report JSON";
+                return;
+            }
+
+            Results.Clear();
+            foreach (var r in parsed.Results ?? Array.Empty<ParsedResultJson>())
+            {
+                Results.Add(new ResultRow(
+                    r.AnalyteNameOriginal ?? r.AnalyteShortCode ?? "Analyte",
+                    r.ValueText ?? (r.ValueNumeric?.ToString("0.###") ?? ""),
+                    r.UnitOriginal ?? r.UnitNormalised ?? "",
+                    r.ExtractionConfidence ?? ""));
+            }
+
+            ReviewTasks.Clear();
+            foreach (var t in parsed.ReviewTasks ?? Array.Empty<ParsedReviewTaskJson>())
+            {
+                ReviewTasks.Add(new ReviewTaskRow(t.FieldPath ?? "field", t.Reason ?? "needs review"));
+            }
+
+            ImportStatus = $"Loaded report JSON: {Path.GetFileName(dialog.FileName)}";
+        }
+        catch (Exception ex)
+        {
+            ImportStatus = $"Failed to load JSON: {ex.Message}";
+        }
+    }
+
+    private static string BuildFileName(string panel, string patient, DateTime date, string ext)
+    {
+        var panelSlug = Slug(panel);
+        var patientSlug = Slug(patient);
+        return $"{date:yyyy-MM-dd}_{panelSlug}_{patientSlug}_local.{ext}";
+    }
+
+    private static string Slug(string value)
+    {
+        var cleaned = Regex.Replace(value.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+        return string.IsNullOrWhiteSpace(cleaned) ? "report" : cleaned;
+    }
+
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
@@ -321,4 +407,27 @@ public sealed class RelayCommand : ICommand
         add => CommandManager.RequerySuggested += value;
         remove => CommandManager.RequerySuggested -= value;
     }
+}
+
+public sealed class ParsedReportJson
+{
+    public ParsedResultJson[]? Results { get; set; }
+    public ParsedReviewTaskJson[]? ReviewTasks { get; set; }
+}
+
+public sealed class ParsedResultJson
+{
+    public string? AnalyteNameOriginal { get; set; }
+    public string? AnalyteShortCode { get; set; }
+    public string? ValueText { get; set; }
+    public double? ValueNumeric { get; set; }
+    public string? UnitOriginal { get; set; }
+    public string? UnitNormalised { get; set; }
+    public string? ExtractionConfidence { get; set; }
+}
+
+public sealed class ParsedReviewTaskJson
+{
+    public string? FieldPath { get; set; }
+    public string? Reason { get; set; }
 }
