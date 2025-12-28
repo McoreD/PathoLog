@@ -131,7 +131,7 @@ For each result row, capture
 - abnormal flags if shown
 - detection status for microbiology
 - censored values like < 0.03 using censored=true and censor_operator=lt
-- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence.
+- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence. Do not use placeholders like PDF or REPORT.
 
 Output requirements
 - JSON only
@@ -140,6 +140,7 @@ Output requirements
 - source_anchor per row and per section
 - extraction_confidence per row
 - If a requested test was not performed, add an administrative_event and do not invent results.
+- Do not emit placeholder analytes like "Report imported" or "PDF".
 
 Schema:
 {{
@@ -276,7 +277,7 @@ For each result row, capture
 - abnormal flags if shown
 - detection status for microbiology
 - censored values like < 0.03 using censored=true and censor_operator=lt
-- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence.
+- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence. Do not use placeholders like PDF or REPORT.
 
 Output requirements
 - JSON only
@@ -285,6 +286,7 @@ Output requirements
 - source_anchor per row and per section
 - extraction_confidence per row
 - If a requested test was not performed, add an administrative_event and do not invent results.
+- Do not emit placeholder analytes like "Report imported" or "PDF".
 
 Schema:
 {{
@@ -355,17 +357,20 @@ Text:
 
         if (results.Count == 0)
         {
-            results.Add(new ParsedPayloadResult(
-                "Report imported",
-                "PDF",
-                "qualitative",
-                null,
-                "Parsed text captured",
-                null,
-                null,
-                null,
-                "low",
-                null));
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                results.Add(new ParsedPayloadResult(
+                    "Report imported",
+                    "PDF",
+                    "qualitative",
+                    null,
+                    "Parsed text captured",
+                    null,
+                    null,
+                    null,
+                    "low",
+                    null));
+            }
         }
 
         return new AiParseResult(results);
@@ -396,20 +401,7 @@ Text:
             }
         }
 
-        if (results.Count == 0)
-        {
-            results.Add(new ParsedPayloadResult(
-                "Report imported",
-                "PDF",
-                "qualitative",
-                null,
-                "Parsed text captured",
-                null,
-                null,
-                null,
-                "low",
-                null));
-        }
+        // Keep empty results when AI returns no structured rows.
 
         return new AiParseResult(results);
     }
