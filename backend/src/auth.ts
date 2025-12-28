@@ -1,10 +1,7 @@
 import { NextFunction, Request, Response } from "express";
-import { User } from "@prisma/client";
-import { prisma } from "./db.js";
-import { ensureFamilyAccountForUser } from "./family.js";
-import { ensureFamilyMembership } from "./access.js";
+import { upsertUserByEmail, UserRecord } from "./data.js";
 
-export type AuthedRequest = Request & { user?: User };
+export type AuthedRequest = Request & { user?: UserRecord };
 
 type AuthPrincipal = {
   provider: string;
@@ -63,35 +60,15 @@ function getPrincipal(req: Request): AuthPrincipal | null {
 }
 
 async function upsertUser(principal: AuthPrincipal) {
-  const provider = principal.provider.toLowerCase();
-  const data: Record<string, string | null> = {
+  return upsertUserByEmail({
+    email: principal.email,
     fullName: principal.fullName,
-  };
-  if (provider === "google") {
-    data.googleSub = principal.userId;
-  } else if (provider === "aad") {
-    data.microsoftSub = principal.userId;
-  }
-  const user = await prisma.user.upsert({
-    where: { email: principal.email },
-    update: data,
-    create: {
-      email: principal.email,
-      fullName: principal.fullName,
-      googleSub: data.googleSub ?? null,
-      microsoftSub: data.microsoftSub ?? null,
-    },
+    provider: principal.provider.toLowerCase(),
+    providerUserId: principal.userId,
   });
-  await ensureFamilyAccountForUser(user);
-  await ensureFamilyMembership(user);
-  return user;
 }
 
-export async function authMiddleware(
-  req: AuthedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function authMiddleware(req: AuthedRequest, res: Response, next: NextFunction) {
   try {
     const principal = getPrincipal(req);
     if (!principal) {
@@ -114,20 +91,4 @@ export async function authMiddleware(
     const message = err instanceof Error ? err.message : "Auth failed";
     return res.status(500).json({ error: "Authentication failed", detail: message });
   }
-}
-
-export async function getAuthUser(req: Request): Promise<User | null> {
-  const principal = getPrincipal(req);
-  if (!principal) {
-    if (allowAnonymousAuth()) {
-      return upsertUser({
-        provider: "local",
-        userId: "local",
-        email: "local@patholog.dev",
-        fullName: "Local User",
-      });
-    }
-    return null;
-  }
-  return upsertUser(principal);
 }

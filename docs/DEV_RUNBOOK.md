@@ -8,10 +8,9 @@
 ## Backend (`backend`)
 1. Copy `.env.example` to `.env` and update:
    - `DATABASE_URL`
-   - Storage: keep `STORAGE_PROVIDER=local` for dev or set S3 values.
    - Optional: `ALLOW_ANONYMOUS_AUTH=true` to bypass SWA auth locally.
 2. Install deps: `npm install`
-3. Generate migration SQL (already in `prisma/migrations/001_init.sql`); apply with `psql` or `prisma migrate dev`.
+3. Migrations run on startup from `backend/sql/*.sql`.
 4. Start dev server: `npm run dev` (defaults to port 4000).
 
 ## Frontend (`frontend`)
@@ -24,8 +23,7 @@
 - For local testing, either use the SWA CLI or set `ALLOW_ANONYMOUS_AUTH=true`.
 
 ## File Storage
-- Local mode stores files under `storage/` relative to the repo by default.
-- S3 mode requires `S3_BUCKET`, region, credentials, and optional custom endpoint for MinIO.
+- Files are stored in Postgres `bytea` via the API.
 
 ## Development Workflow
 - Backend endpoints: `GET /health`, `GET /me`, `POST /patients`, `GET/POST /patients/:patientId/reports`.

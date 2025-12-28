@@ -1,3 +1,13 @@
-import { PrismaClient } from "@prisma/client";
+import pg, { type QueryResultRow } from "pg";
+import { env } from "./env.js";
 
-export const prisma = new PrismaClient();
+const { Pool } = pg;
+
+export const pool = new Pool({
+  connectionString: env.DATABASE_URL,
+});
+
+export async function query<T extends QueryResultRow = any>(text: string, params?: any[]) {
+  const res = await pool.query<T>(text, params);
+  return res;
+}

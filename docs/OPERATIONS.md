@@ -7,18 +7,11 @@
 - Rate limiting: 300 requests / 15 minutes per IP (config in `backend/src/server.ts`).
 
 ## Storage
-- For production use Azure Blob via S3-compatible endpoint:
-  - `STORAGE_PROVIDER=s3`
-  - `S3_ENDPOINT=https://<account>.blob.core.windows.net`
-  - `S3_BUCKET=<container>`
-  - `S3_REGION=<region>`
-  - `S3_ACCESS_KEY_ID=<storage account name>`
-  - `S3_SECRET_ACCESS_KEY=<key or SAS>`
-- Signed URLs: enabled automatically when using S3/Blob; TTL controlled by `SIGNED_URL_TTL_SECONDS`. Local storage is non-durable; avoid in production.
+- Files are stored in Postgres `bytea` via the API. Ensure database size limits match expected usage.
 
 ## Database (Neon Postgres)
 - Backups: Neon provides PITR; configure retention in Neon console. For manual snapshots/restore, use branch snapshots.
-- Migrations: applied via `npx prisma db execute` (raw SQL) or future Prisma migrations; ensure CI applies before deploy.
+- Migrations: applied on backend startup from `backend/sql/*.sql`.
 
 ## Security
 - Secrets in SWA settings; never commit.
@@ -32,5 +25,5 @@
 - Config restore: export SWA configuration (JSON) after changes; keep infra as code where possible.
 
 ## Deployment Notes
-- SWA: set `DATABASE_URL`, storage vars, optional `APPINSIGHTS_CONNECTION_STRING`.
+- SWA: set `DATABASE_URL`, optional `APPINSIGHTS_CONNECTION_STRING`.
 - Build commands: backend `npm ci && npm run build`; frontend built by SWA action.

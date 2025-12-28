@@ -5,7 +5,7 @@
   - `STORAGE_PROVIDER` = `local` (note: not durable across redeploy/scale; switch to Azure Blob later)
   - `SIGNED_URL_TTL_SECONDS` = optional (default 900)
   - `ALLOW_ANONYMOUS_AUTH` = optional for local testing
-- [ ] Run migrations against Neon once: `cd backend && npx prisma migrate deploy` (with `DATABASE_URL` set).
+- [ ] Run migrations by starting the backend once with `DATABASE_URL` set.
 - [ ] SWA authentication:
   - Configure Microsoft (AAD) provider in the Static Web App Authentication settings.
   - Configure Google provider in the Static Web App Authentication settings.
