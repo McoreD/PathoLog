@@ -26,8 +26,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<TrendSeriesViewModel> Trends { get; } = new();
     private readonly SettingsStore _settingsStore = new();
     private readonly PatientStore _patientStore = new();
-    private readonly Dictionary<string, List<ResultRow>> _resultsByReport = new();
-    private readonly Dictionary<string, List<ReviewTaskRow>> _reviewsByReport = new();
+    private readonly Dictionary<string, string> _reportJsonPaths = new();
     private AppSettings _settings;
     private bool _isImporting;
     private const string OpenAiModel = "gpt-4o";
@@ -197,9 +196,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
                 ImportStatus = $"Import completed for {System.IO.Path.GetFileName(file)}";
 
-                SaveReportJsonToDisk(file, parsedResults, parsedReviews);
-                _resultsByReport[report.Id] = parsedResults.ToList();
-                _reviewsByReport[report.Id] = parsedReviews.ToList();
+                var jsonPath = SaveReportJsonToDisk(file, parsedResults, parsedReviews);
+                _reportJsonPaths[report.Id] = jsonPath;
                 ApplyReportData(report.Id);
             }
         }
@@ -336,21 +334,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 return;
             }
 
-            var loadedResults = (parsed.Report.Results ?? Array.Empty<ParsedResultJson>())
-                .Select(r => new ResultRow(
-                    r.AnalyteNameOriginal ?? r.AnalyteShortCode ?? "Analyte",
-                    r.ValueText ?? (r.ValueNumeric?.ToString("0.###") ?? ""),
-                    r.UnitOriginal ?? r.UnitNormalised ?? "",
-                    r.ExtractionConfidence ?? ""))
-                .ToList();
-
-            var loadedReviews = (parsed.Report.ReviewTasks ?? Array.Empty<ParsedReviewTaskJson>())
-                .Select(t => new ReviewTaskRow(t.FieldPath ?? "field", t.Reason ?? "needs review"))
-                .ToList();
-
             var reportId = parsed.Report.ReportId ?? Guid.NewGuid().ToString();
-            _resultsByReport[reportId] = loadedResults;
-            _reviewsByReport[reportId] = loadedReviews;
+            _reportJsonPaths[reportId] = dialog.FileName;
 
             if (Reports.All(r => r.Id != reportId))
             {
@@ -379,7 +364,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         return string.IsNullOrWhiteSpace(cleaned) ? "report" : cleaned;
     }
 
-    private void SaveReportJsonToDisk(string pdfPath, IEnumerable<ResultRow> results, IEnumerable<ReviewTaskRow> reviews)
+    private string SaveReportJsonToDisk(string pdfPath, IEnumerable<ResultRow> results, IEnumerable<ReviewTaskRow> reviews)
     {
         var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         var folder = Path.Combine(docs, "PathoLog", "reports");
@@ -508,7 +493,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         };
 
         var json = JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(Path.Combine(folder, filename), json);
+        var outPath = Path.Combine(folder, filename);
+        File.WriteAllText(outPath, json);
+        return outPath;
     }
 
     private static DateTime? ExtractDateFromName(string fileName)
@@ -540,14 +527,34 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         Results.Clear();
         ReviewTasks.Clear();
-        if (reportId != null && _resultsByReport.TryGetValue(reportId, out var resList))
+        if (string.IsNullOrWhiteSpace(reportId)) return;
+        if (!_reportJsonPaths.TryGetValue(reportId, out var path) || !File.Exists(path)) return;
+
+        try
         {
-            foreach (var r in resList) Results.Add(r);
+            var json = File.ReadAllText(path);
+            var parsed = JsonSerializer.Deserialize<ParsedReportWrapper>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (parsed?.Report is null) return;
+
+            foreach (var r in parsed.Report.Results ?? Array.Empty<ParsedResultJson>())
+            {
+                Results.Add(new ResultRow(
+                    r.AnalyteNameOriginal ?? r.AnalyteShortCode ?? "Analyte",
+                    r.ValueText ?? (r.ValueNumeric?.ToString("0.###") ?? ""),
+                    r.UnitOriginal ?? r.UnitNormalised ?? "",
+                    r.ExtractionConfidence ?? ""));
+            }
+
+            foreach (var t in parsed.Report.ReviewTasks ?? Array.Empty<ParsedReviewTaskJson>())
+            {
+                ReviewTasks.Add(new ReviewTaskRow(t.FieldPath ?? "field", t.Reason ?? "needs review"));
+            }
         }
-        if (reportId != null && _reviewsByReport.TryGetValue(reportId, out var revList))
+        catch
         {
-            foreach (var r in revList) ReviewTasks.Add(r);
+            // ignore load errors
         }
+
         OnPropertyChanged(nameof(PendingReviewsCount));
     }
 
