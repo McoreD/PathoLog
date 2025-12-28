@@ -664,7 +664,7 @@ Output requirements
 - source_anchor per row and per section
 - extraction_confidence per row
 - If a requested test was not performed, add an administrative_event and do not invent results.
-- Do not emit placeholder analytes like "Report imported" or "PDF".
+- Do not emit placeholder analytes like Report imported or PDF.
 
 Schema:
 {{
@@ -809,7 +809,7 @@ Output requirements
 - source_anchor per row and per section
 - extraction_confidence per row
 - If a requested test was not performed, add an administrative_event and do not invent results.
-- Do not emit placeholder analytes like "Report imported" or "PDF".
+- Do not emit placeholder analytes like Report imported or PDF.
 
 Schema:
 {{
