@@ -50,19 +50,19 @@
                         <Border Background="#F1F5F9" CornerRadius="8" Padding="12" Margin="0,0,12,0">
                             <StackPanel>
                                 <TextBlock Text="Recent Reports" Foreground="#64748B" />
-                                <TextBlock Text="3" FontSize="24" FontWeight="Bold" />
+                                <TextBlock Text="{Binding RecentReportsCount}" FontSize="24" FontWeight="Bold" />
                             </StackPanel>
                         </Border>
                         <Border Background="#F1F5F9" CornerRadius="8" Padding="12" Margin="0,0,12,0">
                             <StackPanel>
                                 <TextBlock Text="Pending Reviews" Foreground="#64748B" />
-                                <TextBlock Text="2" FontSize="24" FontWeight="Bold" />
+                                <TextBlock Text="{Binding PendingReviewsCount}" FontSize="24" FontWeight="Bold" />
                             </StackPanel>
                         </Border>
                         <Border Background="#F1F5F9" CornerRadius="8" Padding="12">
                             <StackPanel>
                                 <TextBlock Text="Mappings" Foreground="#64748B" />
-                                <TextBlock Text="12" FontSize="24" FontWeight="Bold" />
+                                <TextBlock Text="{Binding MappingCount}" FontSize="24" FontWeight="Bold" />
                             </StackPanel>
                         </Border>
                     </UniformGrid>

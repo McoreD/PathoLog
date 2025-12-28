@@ -81,6 +81,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ICommand NewPatientCommand { get; }
     public ICommand LoadReportJsonCommand { get; }
 
+    public int RecentReportsCount => Reports.Count;
+    public int PendingReviewsCount => ReviewTasks.Count;
+    public int MappingCount => Mappings.Count;
+
     public MainViewModel()
     {
         _settings = _settingsStore.Load();
@@ -90,6 +94,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
         SaveSettingsCommand = new RelayCommand(_ => SaveSettings());
         NewPatientCommand = new RelayCommand(_ => CreatePatient());
         LoadReportJsonCommand = new RelayCommand(_ => LoadReportJson());
+
+        Reports.CollectionChanged += (_, __) => OnPropertyChanged(nameof(RecentReportsCount));
+        ReviewTasks.CollectionChanged += (_, __) => OnPropertyChanged(nameof(PendingReviewsCount));
+        Mappings.CollectionChanged += (_, __) => OnPropertyChanged(nameof(MappingCount));
 
         LoadPatientsFromStore();
     }
@@ -330,10 +338,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
             ReviewTasks.Clear();
             foreach (var t in parsed.Report.ReviewTasks ?? Array.Empty<ParsedReviewTaskJson>())
             {
-                ReviewTasks.Add(new ReviewTaskRow(t.FieldPath ?? "field", t.Reason ?? "needs review"));
-            }
+            ReviewTasks.Add(new ReviewTaskRow(t.FieldPath ?? "field", t.Reason ?? "needs review"));
+            OnPropertyChanged(nameof(PendingReviewsCount));
+        }
 
-            ImportStatus = $"Loaded report JSON: {Path.GetFileName(dialog.FileName)}";
+        ImportStatus = $"Loaded report JSON: {Path.GetFileName(dialog.FileName)}";
         }
         catch (Exception ex)
         {
