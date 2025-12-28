@@ -1,0 +1,12 @@
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\bin\Debug\net8.0\PathoLog.Trending.deps.json
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\bin\Debug\net8.0\PathoLog.Trending.dll
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\bin\Debug\net8.0\PathoLog.Trending.pdb
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\obj\Debug\net8.0\PathoLog.Trending.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\obj\Debug\net8.0\PathoLog.Trending.AssemblyInfoInputs.cache
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\obj\Debug\net8.0\PathoLog.Trending.AssemblyInfo.cs
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\obj\Debug\net8.0\PathoLog.Trending.csproj.CoreCompileInputs.cache
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\obj\Debug\net8.0\PathoLog.Trending.sourcelink.json
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\obj\Debug\net8.0\PathoLog.Trending.dll
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\obj\Debug\net8.0\refint\PathoLog.Trending.dll
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\obj\Debug\net8.0\PathoLog.Trending.pdb
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Trending\obj\Debug\net8.0\ref\PathoLog.Trending.dll

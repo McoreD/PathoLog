@@ -1,0 +1,12 @@
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\bin\Debug\net8.0\PathoLog.Contracts.deps.json
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\bin\Debug\net8.0\PathoLog.Contracts.dll
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\bin\Debug\net8.0\PathoLog.Contracts.pdb
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\obj\Debug\net8.0\PathoLog.Contracts.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\obj\Debug\net8.0\PathoLog.Contracts.AssemblyInfoInputs.cache
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\obj\Debug\net8.0\PathoLog.Contracts.AssemblyInfo.cs
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\obj\Debug\net8.0\PathoLog.Contracts.csproj.CoreCompileInputs.cache
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\obj\Debug\net8.0\PathoLog.Contracts.sourcelink.json
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\obj\Debug\net8.0\PathoLog.Contracts.dll
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\obj\Debug\net8.0\refint\PathoLog.Contracts.dll
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\obj\Debug\net8.0\PathoLog.Contracts.pdb
+C:\Users\liveu\source\repos\McoreD\PathoLog\src\shared-dotnet\PathoLog.Contracts\obj\Debug\net8.0\ref\PathoLog.Contracts.dll

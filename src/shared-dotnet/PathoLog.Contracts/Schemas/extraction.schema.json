@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://patholog/schema/extraction.schema.json",
+  "title": "PathoLog Extraction Document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "results"],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "source_file": {
+      "$ref": "#/$defs/source_file"
+    },
+    "patient": {
+      "$ref": "#/$defs/patient"
+    },
+    "report": {
+      "$ref": "#/$defs/report"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/result"
+      }
+    },
+    "comments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/comment"
+      }
+    },
+    "administrative_events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/administrative_event"
+      }
+    }
+  },
+  "$defs": {
+    "extracted_string": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source_anchor", "extraction_confidence"],
+      "properties": {
+        "value": { "type": ["string", "null"] },
+        "source_anchor": { "type": ["string", "null"] },
+        "extraction_confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+    "extracted_number": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source_anchor", "extraction_confidence"],
+      "properties": {
+        "value": { "type": ["number", "null"] },
+        "source_anchor": { "type": ["string", "null"] },
+        "extraction_confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+    "extracted_date": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source_anchor", "extraction_confidence"],
+      "properties": {
+        "value": { "type": ["string", "null"], "format": "date" },
+        "source_anchor": { "type": ["string", "null"] },
+        "extraction_confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+    "source_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file_name": { "type": ["string", "null"] },
+        "file_hash_sha256": { "type": ["string", "null"] },
+        "page_count": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "patient": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "full_name": { "$ref": "#/$defs/extracted_string" },
+        "date_of_birth": { "$ref": "#/$defs/extracted_date" },
+        "sex_at_birth": { "$ref": "#/$defs/extracted_string" },
+        "external_id": { "$ref": "#/$defs/extracted_string" }
+      }
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report_date": { "$ref": "#/$defs/extracted_date" },
+        "laboratory_name": { "$ref": "#/$defs/extracted_string" },
+        "panel_name": { "$ref": "#/$defs/extracted_string" },
+        "specimen_description": { "$ref": "#/$defs/extracted_string" }
+      }
+    },
+    "reference_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "low": { "$ref": "#/$defs/extracted_number" },
+        "high": { "$ref": "#/$defs/extracted_number" },
+        "text": { "$ref": "#/$defs/extracted_string" },
+        "unit": { "$ref": "#/$defs/extracted_string" }
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mapping_method": { "type": ["string", "null"] },
+        "mapping_confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["analyte_name", "analyte_short_code", "value_type"],
+      "properties": {
+        "analyte_name": { "$ref": "#/$defs/extracted_string" },
+        "analyte_short_code": { "$ref": "#/$defs/extracted_string" },
+        "value_type": { "type": "string", "enum": ["numeric", "qualitative", "text"] },
+        "value_number": { "$ref": "#/$defs/extracted_number" },
+        "value_text": { "$ref": "#/$defs/extracted_string" },
+        "unit": { "$ref": "#/$defs/extracted_string" },
+        "flag": { "$ref": "#/$defs/extracted_string" },
+        "reference_range": { "$ref": "#/$defs/reference_range" },
+        "mapping": { "$ref": "#/$defs/mapping" },
+        "overall_confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "value_type": { "const": "numeric" } } },
+          "then": { "required": ["value_number"] }
+        },
+        {
+          "if": { "properties": { "value_type": { "const": "qualitative" } } },
+          "then": { "required": ["value_text"] }
+        },
+        {
+          "if": { "properties": { "value_type": { "const": "text" } } },
+          "then": { "required": ["value_text"] }
+        }
+      ]
+    },
+    "comment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "category": { "$ref": "#/$defs/extracted_string" },
+        "text": { "$ref": "#/$defs/extracted_string" }
+      }
+    },
+    "administrative_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "event_type": { "$ref": "#/$defs/extracted_string" },
+        "description": { "$ref": "#/$defs/extracted_string" },
+        "event_date": { "$ref": "#/$defs/extracted_date" }
+      }
+    }
+  }
+}

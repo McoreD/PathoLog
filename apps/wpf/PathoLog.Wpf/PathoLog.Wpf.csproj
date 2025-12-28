@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\shared-dotnet\PathoLog.Domain\PathoLog.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\shared-dotnet\PathoLog.Contracts\PathoLog.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\src\shared-dotnet\PathoLog.Extraction\PathoLog.Extraction.csproj" />
+    <ProjectReference Include="..\..\..\src\shared-dotnet\PathoLog.Mapping\PathoLog.Mapping.csproj" />
+    <ProjectReference Include="..\..\..\src\shared-dotnet\PathoLog.Persistence\PathoLog.Persistence.csproj" />
+    <ProjectReference Include="..\..\..\src\shared-dotnet\PathoLog.Trending\PathoLog.Trending.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>
