@@ -57,17 +57,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private string? _selectedFileName;
-    public string? SelectedFileName
+    private readonly List<string> _selectedFiles = new();
+    private string? _selectedFilesLabel;
+    public string? SelectedFilesLabel
     {
-        get => _selectedFileName;
-        set
-        {
-            if (SetField(ref _selectedFileName, value))
-            {
-                CommandManager.InvalidateRequerySuggested();
-            }
-        }
+        get => _selectedFilesLabel;
+        set => SetField(ref _selectedFilesLabel, value);
     }
 
     private string _importStatus = "Ready to import";
@@ -110,17 +105,26 @@ public sealed class MainViewModel : INotifyPropertyChanged
         var dialog = new OpenFileDialog
         {
             Filter = "PDF files (*.pdf)|*.pdf",
-            Title = "Select pathology PDF"
+            Title = "Select pathology PDF(s)",
+            Multiselect = true
         };
 
         if (dialog.ShowDialog() == true)
         {
-            SelectedFileName = dialog.FileName;
+            _selectedFiles.Clear();
+            _selectedFiles.AddRange(dialog.FileNames);
+            SelectedFilesLabel = _selectedFiles.Count switch
+            {
+                0 => "No files selected",
+                1 => System.IO.Path.GetFileName(_selectedFiles[0]),
+                _ => $"{_selectedFiles.Count} files selected (first: {System.IO.Path.GetFileName(_selectedFiles[0])})"
+            };
             ImportStatus = "Ready to import";
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 
-    private bool CanImport() => !_isImporting && !string.IsNullOrWhiteSpace(SelectedFileName) && SelectedPatient is not null;
+    private bool CanImport() => !_isImporting && _selectedFiles.Any() && SelectedPatient is not null;
 
     private async Task ImportPdfAsync()
     {
@@ -132,35 +136,38 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _isImporting = true;
         CommandManager.InvalidateRequerySuggested();
 
-        var reportId = $"R-{DateTime.Now:yyyyMMddHHmmss}";
-        var report = new ReportSummary(reportId, DateTime.Now.ToString("yyyy-MM-dd"), System.IO.Path.GetFileName(SelectedFileName));
-        Reports.Insert(0, report);
-        SelectedReport = report;
         Results.Clear();
-        ImportStatus = $"Queued import for {System.IO.Path.GetFileName(SelectedFileName)}";
-        Results.Add(new ResultRow("Uploaded PDF", "Pending parse", SelectedFileName, "Queued"));
+        ImportStatus = $"Queued import for {_selectedFiles.Count} file(s)";
 
         try
         {
-            await Task.Delay(400);
-            ImportStatus = "Extracting text...";
+            foreach (var file in _selectedFiles)
+            {
+                await Task.Delay(150);
+                var reportId = $"R-{DateTime.Now:yyyyMMddHHmmssfff}";
+                var report = new ReportSummary(reportId, DateTime.Now.ToString("yyyy-MM-dd"), System.IO.Path.GetFileName(file));
+                Reports.Insert(0, report);
+                SelectedReport = report;
+                Results.Clear();
+                Results.Add(new ResultRow("Uploaded PDF", "Pending parse", file, "Queued"));
+                ImportStatus = $"Import queued for {System.IO.Path.GetFileName(file)}";
 
-            await Task.Delay(500);
-            ImportStatus = "Running AI parser...";
+                await Task.Delay(300);
+                ImportStatus = "Extracting text...";
+                await Task.Delay(300);
+                ImportStatus = "Running AI parser...";
+                await Task.Delay(300);
+                ImportStatus = "Normalising results...";
 
-            await Task.Delay(600);
-            ImportStatus = "Normalising results...";
+                Results.Clear();
+                Results.Add(new ResultRow("TSH", "2.1", "mIU/L", "Normal"));
+                Results.Add(new ResultRow("FT4", "14.8", "pmol/L", "Normal"));
+                Results.Add(new ResultRow("HbA1c", "6.1", "%", "Borderline"));
+                ReviewTasks.Clear();
+                ReviewTasks.Add(new ReviewTaskRow("results[2].unit", "Unit mismatch needs confirmation"));
 
-            Results.Clear();
-            Results.Add(new ResultRow("TSH", "2.1", "mIU/L", "Normal"));
-            Results.Add(new ResultRow("FT4", "14.8", "pmol/L", "Normal"));
-            Results.Add(new ResultRow("HbA1c", "6.1", "%", "Borderline"));
-
-            ReviewTasks.Clear();
-            ReviewTasks.Add(new ReviewTaskRow("results[2].unit", "Unit mismatch needs confirmation"));
-            ReviewTasks.Add(new ReviewTaskRow("results[0].mapping", "Low confidence mapping"));
-
-            ImportStatus = "Import completed – results ready for review";
+                ImportStatus = $"Import completed for {System.IO.Path.GetFileName(file)}";
+            }
         }
         finally
         {
