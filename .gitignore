@@ -4,6 +4,8 @@ node_modules/
 dist/
 .turbo/
 .cache/
+bin/
+obj/
 
 # Environment and credentials
 .env
