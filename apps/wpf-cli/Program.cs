@@ -76,6 +76,9 @@ internal static class Program
             return 0;
         }
 
+        var fileHash = ComputeSha256(File.ReadAllBytes(filePath));
+        var contentFingerprint = ComputeSha256(Encoding.UTF8.GetBytes(text + "|" + parsed.results.Count));
+
         var output = new
         {
             schema_version = "cli-1.0",
@@ -84,13 +87,15 @@ internal static class Program
             parsing = new { status = "completed", confidence = InferOverallConfidence(parsed.results) },
             raw_text = text,
             results = parsed.results,
-            review_tasks = parsed.reviewTasks
+            review_tasks = parsed.reviewTasks,
+            file_hash_sha256 = fileHash,
+            content_fingerprint_sha256 = contentFingerprint
         };
 
         var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         var folder = Path.Combine(docs, "PathoLog", "cli-reports");
         Directory.CreateDirectory(folder);
-        var outfile = Path.Combine(folder, "report-latest.json");
+        var outfile = Path.Combine(folder, BuildFileName(filePath, patientName, parsed.results, contentFingerprint));
         await File.WriteAllTextAsync(outfile, JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"Saved structured JSON to {outfile}");
         return 0;
@@ -238,7 +243,7 @@ internal static class Program
 
             var prompt = new
             {
-                model = "gpt-4o-mini",
+                model = "gpt-4.1",
                 temperature = 0.1,
                 messages = new object[]
                 {
@@ -398,7 +403,7 @@ Text:
             };
 
             var resp = await client.PostAsync(
-                $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}",
+                $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={apiKey}",
                 new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
@@ -513,6 +518,52 @@ Text:
             // ignore
         }
         return new AppSettings();
+    }
+
+    private static string BuildFileName(string pdfPath, string patientName, IEnumerable<ParsedResult> results, string hashHex)
+    {
+        var date = ExtractDateFromName(Path.GetFileName(pdfPath)) ?? DateTime.Today;
+        var panel = ExtractPanelFromName(Path.GetFileNameWithoutExtension(pdfPath));
+        var patientSlug = Slugify(patientName);
+        var hash8 = hashHex.Length >= 8 ? hashHex[..8] : hashHex;
+        return $"{date:yyyy-MM-dd}_{panel}_{patientSlug}_{hash8}.json";
+    }
+
+    private static DateTime? ExtractDateFromName(string fileName)
+    {
+        var match = Regex.Match(fileName, @"(?<y>20\\d{2})[-_](?<m>\\d{2})[-_](?<d>\\d{2})");
+        if (match.Success &&
+            int.TryParse(match.Groups["y"].Value, out var y) &&
+            int.TryParse(match.Groups["m"].Value, out var m) &&
+            int.TryParse(match.Groups["d"].Value, out var d))
+        {
+            if (DateTime.TryParse($"{y}-{m}-{d}", out var dt)) return dt;
+        }
+        return null;
+    }
+
+    private static string ExtractPanelFromName(string name)
+    {
+        var withoutDate = Regex.Replace(name, @"^20\\d{2}[-_]\\d{2}[-_]\\d{2}\\s*", "", RegexOptions.IgnoreCase).Trim();
+        if (string.IsNullOrWhiteSpace(withoutDate)) return "report";
+
+        var tokens = withoutDate.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "blood", "test", "tests", "results", "for" };
+        var panelTokens = tokens.Take(4).Where(t => !stopWords.Contains(t)).ToList();
+        if (panelTokens.Count == 0) panelTokens = tokens.Take(2).ToList();
+        return Slugify(string.Join(" ", panelTokens));
+    }
+
+    private static string Slugify(string value)
+    {
+        var cleaned = Regex.Replace(value.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+        return string.IsNullOrWhiteSpace(cleaned) ? "report" : cleaned;
+    }
+
+    private static string ComputeSha256(byte[] data)
+    {
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        return BitConverter.ToString(sha.ComputeHash(data)).Replace("-", "").ToLowerInvariant();
     }
 
     private sealed class AppSettings
