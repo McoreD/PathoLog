@@ -137,7 +137,7 @@ For each result row, capture
 - abnormal flags if shown
 - detection status for microbiology
 - censored values like < 0.03 using censored=true and censor_operator=lt
-- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence.
+- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence. Do not use placeholders like PDF or REPORT.
 
 Output requirements
 - JSON only
@@ -146,6 +146,7 @@ Output requirements
 - source_anchor per row and per section
 - extraction_confidence per row
 - If a requested test was not performed, add an administrative_event and do not invent results.
+- Do not emit placeholder analytes like "Report imported" or "PDF".
 
 Schema:
 {
@@ -257,7 +258,7 @@ For each result row, capture
 - abnormal flags if shown
 - detection status for microbiology
 - censored values like < 0.03 using censored=true and censor_operator=lt
-- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence.
+- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence. Do not use placeholders like PDF or REPORT.
 
 Output requirements
 - JSON only
@@ -266,6 +267,7 @@ Output requirements
 - source_anchor per row and per section
 - extraction_confidence per row
 - If a requested test was not performed, add an administrative_event and do not invent results.
+- Do not emit placeholder analytes like "Report imported" or "PDF".
 
 Schema:
 {
@@ -329,14 +331,18 @@ function extractHeuristic(text: string): AiParseOutput {
   }
 
   if (results.length === 0) {
-    results.push({
-      analyte_name_original: "Report imported",
-      analyte_short_code: "PDF",
-      result_type: "qualitative",
-      value_text: "Parsed text captured",
-      extraction_confidence: "low",
-    });
-    reviewTasks.push({ field_path: "result:Report imported", reason: "Low confidence extraction" });
+    if (!text) {
+      results.push({
+        analyte_name_original: "Report imported",
+        analyte_short_code: "PDF",
+        result_type: "qualitative",
+        value_text: "Parsed text captured",
+        extraction_confidence: "low",
+      });
+      reviewTasks.push({ field_path: "result:Report imported", reason: "Low confidence extraction" });
+    } else {
+      reviewTasks.push({ field_path: "results", reason: "No structured results parsed from PDF text" });
+    }
   }
 
   return { results, reviewTasks, reportType: null };

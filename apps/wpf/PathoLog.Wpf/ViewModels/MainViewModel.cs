@@ -29,10 +29,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<MappingRow> Mappings { get; } = new();
     public ObservableCollection<TrendSeriesViewModel> Trends { get; } = new();
     private readonly SettingsStore _settingsStore = new();
+    private readonly ReportTemplateStore _templateStore = new();
     private readonly PatientStore _patientStore = new();
     private readonly Dictionary<string, string> _reportJsonPaths = new();
     private readonly Dictionary<string, string> _reportPdfPaths = new();
     private AppSettings _settings;
+    private string _reportTemplateJson = "";
     private bool _isImporting;
     private const string OpenAiModel = "gpt-4o";
     private const string GeminiModel = "gemini-2.5-pro";
@@ -123,6 +125,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public MainViewModel()
     {
         _settings = _settingsStore.Load();
+        _reportTemplateJson = _templateStore.LoadOrSeed();
         SelectPdfCommand = new RelayCommand(_ => SelectPdf());
         ImportPdfCommand = new RelayCommand(async _ => await ImportPdfAsync(), _ => CanImport());
         ExportCsvCommand = new RelayCommand(_ => ExportCsv());
@@ -237,6 +240,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public void SaveSettings()
     {
         _settingsStore.Save(_settings);
+        SaveTemplate();
     }
 
     public void ReloadSettings()
@@ -244,6 +248,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _settings = _settingsStore.Load();
         OnPropertyChanged(nameof(OpenAiApiKey));
         OnPropertyChanged(nameof(GeminiApiKey));
+    }
+
+    public void SaveTemplate()
+    {
+        _templateStore.Save(_reportTemplateJson);
     }
 
     private void LoadPatientsFromStore()
@@ -442,7 +451,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
                     specimen_original = (string?)null,
                     page_count = extraction.PageCount,
                     raw_text_extraction_method = extraction.RawTextMethod,
-                    raw_text = string.IsNullOrWhiteSpace(extraction.RawText) ? null : extraction.RawText,
                     parsing_version = "wpf-1.0",
                     parsing_status = parsingStatus,
                     extraction_confidence_overall = InferOverallConfidence(extraction.Results)
@@ -647,7 +655,7 @@ For each result row, capture
 - abnormal flags if shown
 - detection status for microbiology
 - censored values like < 0.03 using censored=true and censor_operator=lt
-- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence.
+- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence. Do not use placeholders like PDF or REPORT.
 
 Output requirements
 - JSON only
@@ -656,6 +664,7 @@ Output requirements
 - source_anchor per row and per section
 - extraction_confidence per row
 - If a requested test was not performed, add an administrative_event and do not invent results.
+- Do not emit placeholder analytes like "Report imported" or "PDF".
 
 Schema:
 {{
@@ -791,7 +800,7 @@ For each result row, capture
 - abnormal flags if shown
 - detection status for microbiology
 - censored values like < 0.03 using censored=true and censor_operator=lt
-- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence.
+- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence. Do not use placeholders like PDF or REPORT.
 
 Output requirements
 - JSON only
@@ -800,6 +809,7 @@ Output requirements
 - source_anchor per row and per section
 - extraction_confidence per row
 - If a requested test was not performed, add an administrative_event and do not invent results.
+- Do not emit placeholder analytes like "Report imported" or "PDF".
 
 Schema:
 {{
@@ -908,16 +918,23 @@ Text:
 
         if (results.Count == 0)
         {
-            results.Add(new ParsedResultJson
+            if (string.IsNullOrWhiteSpace(text))
             {
-                AnalyteNameOriginal = "Report imported",
-                AnalyteShortCode = "PDF",
-                ResultType = "qualitative",
-                ValueText = "Parsed text captured",
-                ExtractionConfidence = "low"
-            });
-            reviewTasks.Add(new ParsedReviewTaskJson { FieldPath = "result:Report imported", Reason = "Low confidence extraction" });
-            reviewTasks.Add(new ParsedReviewTaskJson { FieldPath = "result:Report imported:unit", Reason = "Unit missing" });
+                results.Add(new ParsedResultJson
+                {
+                    AnalyteNameOriginal = "Report imported",
+                    AnalyteShortCode = "PDF",
+                    ResultType = "qualitative",
+                    ValueText = "Parsed text captured",
+                    ExtractionConfidence = "low"
+                });
+                reviewTasks.Add(new ParsedReviewTaskJson { FieldPath = "result:Report imported", Reason = "Low confidence extraction" });
+                reviewTasks.Add(new ParsedReviewTaskJson { FieldPath = "result:Report imported:unit", Reason = "Unit missing" });
+            }
+            else
+            {
+                reviewTasks.Add(new ParsedReviewTaskJson { FieldPath = "results", Reason = "No structured results parsed from PDF text" });
+            }
         }
 
         results = results
