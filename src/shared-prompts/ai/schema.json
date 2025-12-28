@@ -1,0 +1,20 @@
+{
+  "results": [
+    {
+      "analyte_name_original": "string",
+      "analyte_short_code": "string",
+      "result_type": "numeric|qualitative",
+      "value_numeric": "number|null",
+      "value_text": "string|null",
+      "unit_original": "string|null",
+      "extraction_confidence": "high|medium|low",
+      "source_anchor": "string|null"
+    }
+  ],
+  "review_tasks": [
+    {
+      "field_path": "string",
+      "reason": "string"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+You are parsing an Australian pathology PDF report.
+
+Task
+1. Classify the report type. Choose one
+blood_chemistry
+haematology
+endocrine
+immunology
+microbiology_pcr
+microbiology_culture
+urine
+faeces
+histology
+administrative_only
+
+2. Identify the main results table or list. Return page number and the exact header text above it.
+
+3. Extract patient identifiers and report timestamps.
+
+4. Return a short glossary of analytes or targets found. Keep original spelling.
+
+Rules
+- Output JSON only.
+- If a field is not present, use null.
+- Provide source_anchor values like page_1_table_iron_studies or page_2_section_microbiology.
+
+Text:
+{{TEXT}}

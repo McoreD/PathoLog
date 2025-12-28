@@ -8,6 +8,7 @@ public static class AiParsingService
     private const string OpenAiModel = "gpt-4o";
     private const string GeminiModel = "gemini-2.5-pro";
     private static readonly HttpClient Client = new();
+    private static readonly SharedPromptStore PromptStore = new();
 
     public static async Task<IReadOnlyList<ParsedPayloadResult>> ParseAsync(byte[] pdfBytes, string? openAiKey, string? geminiKey)
     {
@@ -50,6 +51,7 @@ public static class AiParsingService
             return null;
         }
 
+        var pass1Prompt = PromptStore.BuildPass1Prompt(text);
         var pass1Payload = new
         {
             model = OpenAiModel,
@@ -60,32 +62,7 @@ public static class AiParsingService
                 new
                 {
                     role = "user",
-                    content = $@"Task
-1. Classify the report type. Choose one
-blood_chemistry
-haematology
-endocrine
-immunology
-microbiology_pcr
-microbiology_culture
-urine
-faeces
-histology
-administrative_only
-
-2. Identify the main results table or list. Return page number and the exact header text above it.
-
-3. Extract patient identifiers and report timestamps.
-
-4. Return a short glossary of analytes or targets found. Keep original spelling.
-
-Rules
-- Output JSON only.
-- If a field is not present, use null.
-- Provide source_anchor values like page_1_table_iron_studies or page_2_section_microbiology.
-
-Text:
-{text}"
+                    content = pass1Prompt
                 }
             }
         };
@@ -100,6 +77,7 @@ Text:
             pass1Json = null;
         }
 
+        var pass2Prompt = PromptStore.BuildPass2Prompt(text, pass1Json);
         var pass2Payload = new
         {
             model = OpenAiModel,
@@ -110,59 +88,7 @@ Text:
                 new
                 {
                     role = "user",
-                    content = $@"Context
-This report is of type <report_type_from_pass_1>. It may contain
-- results in tables with columns like Test Result Units Reference range Flag
-- multiple subpanels on one report
-- cumulative tables with historical rows
-- microbiology targets with Detected or Not Detected
-- narrative comments or specimen notes
-- tests not performed
-
-Pass 1 JSON:
-{pass1Json ?? "null"}
-
-Task
-Populate this JSON schema exactly. Do not add keys. Do not rename keys.
-For each result row, capture
-- analyte_name_original exactly as printed
-- unit_original exactly as printed
-- reference range exactly as printed
-- abnormal flags if shown
-- detection status for microbiology
-- censored values like < 0.03 using censored=true and censor_operator=lt
-- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence. Do not use placeholders like PDF or REPORT.
-
-Output requirements
-- JSON only
-- Keep numeric values as numbers
-- Keep value_text as the exact printed text
-- source_anchor per row and per section
-- extraction_confidence per row
-- If a requested test was not performed, add an administrative_event and do not invent results.
-- Do not emit placeholder analytes like "Report imported" or "PDF".
-
-Schema:
-{{
-  ""results"": [
-    {{
-      ""analyte_name_original"": string,
-      ""analyte_short_code"": string,
-      ""result_type"": ""numeric"" | ""qualitative"",
-      ""value_numeric"": number | null,
-      ""value_text"": string | null,
-      ""unit_original"": string | null,
-      ""extraction_confidence"": ""high"" | ""medium"" | ""low"",
-      ""source_anchor"": string | null
-    }}
-  ],
-  ""review_tasks"": [
-    {{ ""field_path"": string, ""reason"": string }}
-  ]
-}}
-
-Text:
-{text}"
+                    content = pass2Prompt
                 }
             }
         };
@@ -185,6 +111,7 @@ Text:
             return null;
         }
 
+        var pass1Prompt = PromptStore.BuildPass1Prompt(text);
         var pass1Payload = new
         {
             contents = new[]
@@ -196,35 +123,7 @@ Text:
                     {
                         new
                         {
-                            text =
-$@"You are parsing an Australian pathology PDF report.
-
-Task
-1. Classify the report type. Choose one
-blood_chemistry
-haematology
-endocrine
-immunology
-microbiology_pcr
-microbiology_culture
-urine
-faeces
-histology
-administrative_only
-
-2. Identify the main results table or list. Return page number and the exact header text above it.
-
-3. Extract patient identifiers and report timestamps.
-
-4. Return a short glossary of analytes or targets found. Keep original spelling.
-
-Rules
-- Output JSON only.
-- If a field is not present, use null.
-- Provide source_anchor values like page_1_table_iron_studies or page_2_section_microbiology.
-
-Text:
-{text}"
+                            text = pass1Prompt
                         }
                     }
                 }
@@ -242,6 +141,7 @@ Text:
             pass1Json = null;
         }
 
+        var pass2Prompt = PromptStore.BuildPass2Prompt(text, pass1Json);
         var pass2Payload = new
         {
             contents = new[]
@@ -253,62 +153,7 @@ Text:
                     {
                         new
                         {
-                            text =
-$@"You are extracting structured pathology results from an Australian lab PDF.
-
-Context
-This report is of type <report_type_from_pass_1>. It may contain
-- results in tables with columns like Test Result Units Reference range Flag
-- multiple subpanels on one report
-- cumulative tables with historical rows
-- microbiology targets with Detected or Not Detected
-- narrative comments or specimen notes
-- tests not performed
-
-Pass 1 JSON:
-{pass1Json ?? "null"}
-
-Task
-Populate this JSON schema exactly. Do not add keys. Do not rename keys.
-For each result row, capture
-- analyte_name_original exactly as printed
-- unit_original exactly as printed
-- reference range exactly as printed
-- abnormal flags if shown
-- detection status for microbiology
-- censored values like < 0.03 using censored=true and censor_operator=lt
-- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence. Do not use placeholders like PDF or REPORT.
-
-Output requirements
-- JSON only
-- Keep numeric values as numbers
-- Keep value_text as the exact printed text
-- source_anchor per row and per section
-- extraction_confidence per row
-- If a requested test was not performed, add an administrative_event and do not invent results.
-- Do not emit placeholder analytes like "Report imported" or "PDF".
-
-Schema:
-{{
-  ""results"": [
-    {{
-      ""analyte_name_original"": string,
-      ""analyte_short_code"": string,
-      ""result_type"": ""numeric"" | ""qualitative"",
-      ""value_numeric"": number | null,
-      ""value_text"": string | null,
-      ""unit_original"": string | null,
-      ""extraction_confidence"": ""high"" | ""medium"" | ""low"",
-      ""source_anchor"": string | null
-    }}
-  ],
-  ""review_tasks"": [
-    {{ ""field_path"": string, ""reason"": string }}
-  ]
-}}
-
-Text:
-{text}"
+                            text = pass2Prompt
                         }
                     }
                 }
@@ -456,6 +301,40 @@ Text:
     }
 
     private sealed record AiParseResult(IReadOnlyList<ParsedPayloadResult> Results);
+}
+
+internal sealed class SharedPromptStore
+{
+    private readonly string _basePath = Path.Combine(AppContext.BaseDirectory, "shared-prompts", "ai");
+    private readonly Lazy<string> _pass1Template;
+    private readonly Lazy<string> _pass2Template;
+    private readonly Lazy<string> _schemaTemplate;
+
+    public SharedPromptStore()
+    {
+        _pass1Template = new Lazy<string>(() => LoadFile("pass1.txt"));
+        _pass2Template = new Lazy<string>(() => LoadFile("pass2.txt"));
+        _schemaTemplate = new Lazy<string>(() => LoadFile("schema.json"));
+    }
+
+    public string BuildPass1Prompt(string text)
+    {
+        return _pass1Template.Value.Replace("{{TEXT}}", text);
+    }
+
+    public string BuildPass2Prompt(string text, string? pass1Json)
+    {
+        return _pass2Template.Value
+            .Replace("{{PASS1_JSON}}", pass1Json ?? "null")
+            .Replace("{{SCHEMA}}", _schemaTemplate.Value)
+            .Replace("{{TEXT}}", text);
+    }
+
+    private string LoadFile(string name)
+    {
+        var path = Path.Combine(_basePath, name);
+        return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+    }
 }
 
 internal static class AiJsonExtensions

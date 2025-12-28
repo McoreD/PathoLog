@@ -1,0 +1,39 @@
+You are extracting structured pathology results from an Australian lab PDF.
+
+Context
+This report is of type <report_type_from_pass_1>. It may contain
+- results in tables with columns like Test Result Units Reference range Flag
+- multiple subpanels on one report
+- cumulative tables with historical rows
+- microbiology targets with Detected or Not Detected
+- narrative comments or specimen notes
+- tests not performed
+
+Pass 1 JSON:
+{{PASS1_JSON}}
+
+Task
+Populate this JSON schema exactly. Do not add keys. Do not rename keys.
+For each result row, capture
+- analyte_name_original exactly as printed
+- unit_original exactly as printed
+- reference range exactly as printed
+- abnormal flags if shown
+- detection status for microbiology
+- censored values like < 0.03 using censored=true and censor_operator=lt
+- create analyte_short_code if absent in the PDF. Use 2 to 5 characters. Prefer common clinical abbreviations. Store mapping_method=generated and mapping_confidence. Do not use placeholders like PDF or REPORT.
+
+Output requirements
+- JSON only
+- Keep numeric values as numbers
+- Keep value_text as the exact printed text
+- source_anchor per row and per section
+- extraction_confidence per row
+- If a requested test was not performed, add an administrative_event and do not invent results.
+- Do not emit placeholder analytes like Report imported or PDF.
+
+Schema:
+{{SCHEMA}}
+
+Text:
+{{TEXT}}
