@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
@@ -19,6 +20,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<TrendSeriesViewModel> Trends { get; } = new();
     private readonly SettingsStore _settingsStore = new();
     private AppSettings _settings;
+    private bool _isImporting;
 
     private PatientSummary? _selectedPatient;
     public PatientSummary? SelectedPatient
@@ -50,7 +52,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string? SelectedFileName
     {
         get => _selectedFileName;
-        set => SetField(ref _selectedFileName, value);
+        set
+        {
+            if (SetField(ref _selectedFileName, value))
+            {
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
     }
 
     private string _importStatus = "Ready to import";
@@ -70,7 +78,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         _settings = _settingsStore.Load();
         SelectPdfCommand = new RelayCommand(_ => SelectPdf());
-        ImportPdfCommand = new RelayCommand(_ => ImportPdf(), _ => !string.IsNullOrWhiteSpace(SelectedFileName));
+        ImportPdfCommand = new RelayCommand(async _ => await ImportPdfAsync(), _ => CanImport());
         ExportCsvCommand = new RelayCommand(_ => ExportCsv());
         SaveSettingsCommand = new RelayCommand(_ => SaveSettings());
         NewPatientCommand = new RelayCommand(_ => CreatePatient());
@@ -93,26 +101,53 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private void ImportPdf()
-    {
-        ImportStatus = string.IsNullOrWhiteSpace(SelectedFileName)
-            ? "Select a PDF to import"
-            : $"Queued import for {System.IO.Path.GetFileName(SelectedFileName)}";
+    private bool CanImport() => !_isImporting && !string.IsNullOrWhiteSpace(SelectedFileName) && SelectedPatient is not null;
 
-        if (string.IsNullOrWhiteSpace(SelectedFileName) || SelectedPatient is null)
+    private async Task ImportPdfAsync()
+    {
+        if (!CanImport())
         {
             return;
         }
+
+        _isImporting = true;
+        CommandManager.InvalidateRequerySuggested();
 
         var reportId = $"R-{DateTime.Now:yyyyMMddHHmmss}";
         var report = new ReportSummary(reportId, DateTime.Now.ToString("yyyy-MM-dd"), System.IO.Path.GetFileName(SelectedFileName));
         Reports.Insert(0, report);
         SelectedReport = report;
-
         Results.Clear();
+        ImportStatus = $"Queued import for {System.IO.Path.GetFileName(SelectedFileName)}";
         Results.Add(new ResultRow("Uploaded PDF", "Pending parse", SelectedFileName, "Queued"));
 
-        ImportStatus = $"Import queued for {SelectedFileName}";
+        try
+        {
+            await Task.Delay(400);
+            ImportStatus = "Extracting text...";
+
+            await Task.Delay(500);
+            ImportStatus = "Running AI parser...";
+
+            await Task.Delay(600);
+            ImportStatus = "Normalising results...";
+
+            Results.Clear();
+            Results.Add(new ResultRow("TSH", "2.1", "mIU/L", "Normal"));
+            Results.Add(new ResultRow("FT4", "14.8", "pmol/L", "Normal"));
+            Results.Add(new ResultRow("HbA1c", "6.1", "%", "Borderline"));
+
+            ReviewTasks.Clear();
+            ReviewTasks.Add(new ReviewTaskRow("results[2].unit", "Unit mismatch needs confirmation"));
+            ReviewTasks.Add(new ReviewTaskRow("results[0].mapping", "Low confidence mapping"));
+
+            ImportStatus = "Import completed – results ready for review";
+        }
+        finally
+        {
+            _isImporting = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
 
     private void ExportCsv()
