@@ -2,12 +2,17 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { query } from "./db.js";
+import { env } from "./env.js";
 import { logger } from "./logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function applyMigrations() {
+  if (!env.DATABASE_URL) {
+    logger.warn("DATABASE_URL not set; skipping migrations");
+    return;
+  }
   const sqlDir = path.resolve(__dirname, "..", "sql");
   let entries: string[] = [];
   try {

@@ -574,8 +574,7 @@ async function start() {
 }
 
 start().catch((err) => {
-  logger.error({ err }, "Startup failed");
-  process.exit(1);
+  logger.error({ err }, "Startup failed; continuing to serve for diagnostics");
 });
 
 if (process.env.PATHOLOG_LISTEN !== "false") {
