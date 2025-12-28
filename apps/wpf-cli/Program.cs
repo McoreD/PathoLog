@@ -53,10 +53,11 @@ if (showText)
 }
 
 var results = ExtractResults(text);
-Console.WriteLine($"Extracted results: {results.Count}");
+var reviewTasks = BuildReviewTasks(results);
+Console.WriteLine($"Extracted results: {results.Count} (review tasks: {reviewTasks.Count})");
 foreach (var r in results.Take(5))
 {
-    Console.WriteLine($" - {r.AnalyteNameOriginal} => {r.ValueText ?? r.ValueNumeric?.ToString() ?? "n/a"} {r.UnitOriginal} ({r.ResultType})");
+    Console.WriteLine($" - {r.AnalyteNameOriginal} => {r.ValueText ?? r.ValueNumeric?.ToString() ?? "n/a"} {r.UnitOriginal ?? ""} ({r.ResultType}) [{r.ExtractionConfidence}]");
 }
 
 if (!save)
@@ -67,9 +68,13 @@ if (!save)
 
 var output = new
 {
+    schema_version = "cli-1.0",
     patient = new { name = patientName, email },
-    source = new { file = filePath, pages, textLength = text.Length },
-    results
+    source = new { file = filePath, pages, text_length = text.Length },
+    parsing = new { status = "completed", confidence = InferOverallConfidence(results) },
+    raw_text = text,
+    results,
+    review_tasks = reviewTasks
 };
 
 var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -127,7 +132,7 @@ static List<ParsedResult> ExtractResults(string text)
             ValueNumeric = numeric,
             ValueText = rawVal,
             UnitOriginal = unit,
-            ExtractionConfidence = "low"
+            ExtractionConfidence = numeric is null ? "low" : "medium"
         });
         if (list.Count >= 12) break;
     }
@@ -145,6 +150,34 @@ static List<ParsedResult> ExtractResults(string text)
     }
 
     return list;
+}
+
+static List<ReviewTask> BuildReviewTasks(IEnumerable<ParsedResult> results)
+{
+    var tasks = new List<ReviewTask>();
+    foreach (var r in results)
+    {
+        if (string.IsNullOrWhiteSpace(r.AnalyteShortCode) || r.AnalyteShortCode!.Length < 2)
+        {
+            tasks.Add(new ReviewTask { FieldPath = $"result:{r.AnalyteNameOriginal}:analyte_short_code", Reason = "Missing short code" });
+        }
+        if (r.ExtractionConfidence is "low")
+        {
+            tasks.Add(new ReviewTask { FieldPath = $"result:{r.AnalyteNameOriginal}", Reason = "Low confidence extraction" });
+        }
+        if (string.IsNullOrWhiteSpace(r.UnitOriginal))
+        {
+            tasks.Add(new ReviewTask { FieldPath = $"result:{r.AnalyteNameOriginal}:unit", Reason = "Unit missing" });
+        }
+    }
+    return tasks;
+}
+
+static string InferOverallConfidence(IEnumerable<ParsedResult> results)
+{
+    if (!results.Any()) return "low";
+    if (results.Any(r => r.ExtractionConfidence == "low")) return "medium";
+    return "high";
 }
 
 static string ToShortCode(string name)
@@ -167,4 +200,10 @@ public sealed class ParsedResult
     public string? UnitNormalised { get; set; }
     public string? ReportedDatetimeLocal { get; set; }
     public string? ExtractionConfidence { get; set; }
+}
+
+public sealed class ReviewTask
+{
+    public string FieldPath { get; set; } = "";
+    public string Reason { get; set; } = "";
 }
