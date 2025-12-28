@@ -2,17 +2,31 @@ using System.Text.Json.Serialization;
 
 public record UserRecord(Guid Id, string Email, string? FullName, string? GoogleSub, string? MicrosoftSub);
 
-public record UserResponse(string Id, string Email, string? FullName, bool GoogleLinked, bool MicrosoftLinked);
+public record UserResponse(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("email")] string Email,
+    [property: JsonPropertyName("fullName")] string? FullName,
+    [property: JsonPropertyName("googleLinked")] bool GoogleLinked,
+    [property: JsonPropertyName("microsoftLinked")] bool MicrosoftLinked);
 
 public record PatientRecord(Guid Id, string FullName, DateOnly? Dob, string? Sex, DateTime CreatedAtUtc);
 
-public record PatientResponse(string Id, string FullName, DateOnly? Dob, string? Sex);
+public record PatientResponse(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("fullName")] string FullName,
+    [property: JsonPropertyName("dob")] DateOnly? Dob,
+    [property: JsonPropertyName("sex")] string? Sex);
 
-public record SourceFileResponse(string OriginalFilename);
+public record SourceFileResponse(
+    [property: JsonPropertyName("originalFilename")] string OriginalFilename);
 
 public record ReportRecord(Guid Id, Guid PatientId, string ParsingStatus, DateTime CreatedAtUtc, string? OriginalFilename);
 
-public record ReportResponse(string Id, string ParsingStatus, DateTime CreatedAtUtc, SourceFileResponse? SourceFile);
+public record ReportResponse(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("parsingStatus")] string ParsingStatus,
+    [property: JsonPropertyName("createdAtUtc")] DateTime CreatedAtUtc,
+    [property: JsonPropertyName("sourceFile")] SourceFileResponse? SourceFile);
 
 public record ReviewReportResponse(ReportResponse Report, PatientResponse? Patient);
 
@@ -30,21 +44,25 @@ public record ResultRecord(
     string? FlagSeverity);
 
 public record TrendPoint(
-    string Id,
-    DateTime? ReportedDatetimeLocal,
-    DateTime? CollectedDatetimeLocal,
-    decimal? ValueNumeric,
-    string? ValueText,
-    string? UnitOriginal,
-    string? UnitNormalised,
-    string? FlagSeverity,
-    string? ExtractionConfidence,
-    decimal? RefLow,
-    decimal? RefHigh);
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("reportedDatetimeLocal")] DateTime? ReportedDatetimeLocal,
+    [property: JsonPropertyName("collectedDatetimeLocal")] DateTime? CollectedDatetimeLocal,
+    [property: JsonPropertyName("valueNumeric")] decimal? ValueNumeric,
+    [property: JsonPropertyName("valueText")] string? ValueText,
+    [property: JsonPropertyName("unitOriginal")] string? UnitOriginal,
+    [property: JsonPropertyName("unitNormalised")] string? UnitNormalised,
+    [property: JsonPropertyName("flagSeverity")] string? FlagSeverity,
+    [property: JsonPropertyName("extractionConfidence")] string? ExtractionConfidence,
+    [property: JsonPropertyName("refLow")] decimal? RefLow,
+    [property: JsonPropertyName("refHigh")] decimal? RefHigh);
 
-public record AiProviderStatus(string Provider, bool HasKey);
+public record AiProviderStatus(
+    [property: JsonPropertyName("provider")] string Provider,
+    [property: JsonPropertyName("hasKey")] bool HasKey);
 
-public record AiSettingsResponse(string? ActiveProvider, IReadOnlyList<AiProviderStatus> Providers);
+public record AiSettingsResponse(
+    [property: JsonPropertyName("activeProvider")] string? ActiveProvider,
+    [property: JsonPropertyName("providers")] IReadOnlyList<AiProviderStatus> Providers);
 
 public record FileUploadRequest(string Filename, string ContentBase64, string? ContentType);
 
