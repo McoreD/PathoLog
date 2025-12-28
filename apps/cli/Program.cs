@@ -14,7 +14,7 @@ internal static class Program
         var argsDict = ParseArgs(args);
         if (!argsDict.TryGetValue("file", out var filePath))
         {
-            Console.WriteLine("Usage: dotnet run --project apps/wpf-cli/PathoLog.Wpf.Cli.csproj -- --file <pdf> [--patient \"Name\"] [--email you@example.com] [--save] [--show-text]");
+            Console.WriteLine("Usage: dotnet run --project apps/cli/PathoLog.Wpf.Cli.csproj -- --file <pdf> [--patient \"Name\"] [--email you@example.com] [--save] [--show-text]");
             return 1;
         }
 
