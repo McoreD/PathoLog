@@ -208,18 +208,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
         SelectedPatient = Patients.FirstOrDefault();
 
-        // demo static mappings/trends unchanged
         ReviewTasks.Clear();
-        ReviewTasks.Add(new ReviewTaskRow("results[0].value_number", "Low confidence value"));
-        ReviewTasks.Add(new ReviewTaskRow("report.panel_name", "Low confidence value"));
-
         Mappings.Clear();
-        Mappings.Add(new MappingRow("Thyroid Stimulating Hormone", "TSH", "UserConfirmed"));
-        Mappings.Add(new MappingRow("Free T4", "FT4", "Deterministic"));
-
         Trends.Clear();
-        Trends.Add(new TrendSeriesViewModel("TSH", new[] { 0.8, 1.2, 2.1, 1.7 }, new[] { 0.0, 1.0, 2.0, 3.0 }));
-        Trends.Add(new TrendSeriesViewModel("HbA1c", new[] { 5.8, 6.2, 6.0, 5.9 }, new[] { 0.0, 1.0, 2.0, 3.0 }));
     }
 
     private void LoadSampleReports()
