@@ -26,6 +26,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<TrendSeriesViewModel> Trends { get; } = new();
     private readonly SettingsStore _settingsStore = new();
     private readonly PatientStore _patientStore = new();
+    private readonly Dictionary<string, List<ResultRow>> _resultsByReport = new();
+    private readonly Dictionary<string, List<ReviewTaskRow>> _reviewsByReport = new();
     private AppSettings _settings;
     private bool _isImporting;
     private const string OpenAiModel = "gpt-4o";
@@ -196,6 +198,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 ImportStatus = $"Import completed for {System.IO.Path.GetFileName(file)}";
 
                 SaveReportJsonToDisk(file, parsedResults, parsedReviews);
+                _resultsByReport[report.Id] = parsedResults.ToList();
+                _reviewsByReport[report.Id] = parsedReviews.ToList();
+                ApplyReportData(report.Id);
             }
         }
         finally
@@ -331,24 +336,29 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 return;
             }
 
-            Results.Clear();
-            foreach (var r in parsed.Report.Results ?? Array.Empty<ParsedResultJson>())
-            {
-                Results.Add(new ResultRow(
+            var loadedResults = (parsed.Report.Results ?? Array.Empty<ParsedResultJson>())
+                .Select(r => new ResultRow(
                     r.AnalyteNameOriginal ?? r.AnalyteShortCode ?? "Analyte",
                     r.ValueText ?? (r.ValueNumeric?.ToString("0.###") ?? ""),
                     r.UnitOriginal ?? r.UnitNormalised ?? "",
-                    r.ExtractionConfidence ?? ""));
-            }
+                    r.ExtractionConfidence ?? ""))
+                .ToList();
 
-            ReviewTasks.Clear();
-            foreach (var t in parsed.Report.ReviewTasks ?? Array.Empty<ParsedReviewTaskJson>())
+            var loadedReviews = (parsed.Report.ReviewTasks ?? Array.Empty<ParsedReviewTaskJson>())
+                .Select(t => new ReviewTaskRow(t.FieldPath ?? "field", t.Reason ?? "needs review"))
+                .ToList();
+
+            var reportId = parsed.Report.ReportId ?? Guid.NewGuid().ToString();
+            _resultsByReport[reportId] = loadedResults;
+            _reviewsByReport[reportId] = loadedReviews;
+
+            if (Reports.All(r => r.Id != reportId))
             {
-            ReviewTasks.Add(new ReviewTaskRow(t.FieldPath ?? "field", t.Reason ?? "needs review"));
-            OnPropertyChanged(nameof(PendingReviewsCount));
-        }
+                Reports.Add(new ReportSummary(reportId, DateTime.Now.ToString("yyyy-MM-dd"), Path.GetFileName(dialog.FileName)));
+            }
+            SelectedReport = Reports.FirstOrDefault(r => r.Id == reportId);
 
-        ImportStatus = $"Loaded report JSON: {Path.GetFileName(dialog.FileName)}";
+            ImportStatus = $"Loaded report JSON: {Path.GetFileName(dialog.FileName)}";
         }
         catch (Exception ex)
         {
@@ -526,6 +536,21 @@ public sealed class MainViewModel : INotifyPropertyChanged
         return Slug(string.Join(" ", panelTokens));
     }
 
+    private void ApplyReportData(string? reportId)
+    {
+        Results.Clear();
+        ReviewTasks.Clear();
+        if (reportId != null && _resultsByReport.TryGetValue(reportId, out var resList))
+        {
+            foreach (var r in resList) Results.Add(r);
+        }
+        if (reportId != null && _reviewsByReport.TryGetValue(reportId, out var revList))
+        {
+            foreach (var r in revList) ReviewTasks.Add(r);
+        }
+        OnPropertyChanged(nameof(PendingReviewsCount));
+    }
+
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
@@ -592,6 +617,7 @@ public sealed class ParsedReportWrapper
 
 public sealed class ParsedReportJson
 {
+    public string? ReportId { get; set; }
     public ParsedResultJson[]? Results { get; set; }
     public ParsedReviewTaskJson[]? ReviewTasks { get; set; }
 }
