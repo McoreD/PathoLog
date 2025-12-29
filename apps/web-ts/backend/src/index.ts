@@ -27,10 +27,6 @@ app.http('api', {
       
       const distinctApp = await getExpressApp();
 
-      // IMPORTANT: Azure Functions v4 passes a Request object (fetch standard based),
-      // but Express expects Node.js http.IncomingMessage and http.ServerResponse.
-      // We must bridge them.
-
       // 1. Create a dummy Node.js request
       const url = new URL(request.url);
       const req = new http.IncomingMessage(null as any);
@@ -41,15 +37,16 @@ app.http('api', {
         req.headers[key] = value;
       }
       
-      // Handle Body
-      // For binary/json bodies, we need to read it. 
-      // Express body-parser will try to read from the stream if we don't read it here.
-      // However, creating a readable stream from request.body might be cleaner.
-      // BUT simplify: read as arrayBuffer and push to req.
-      const bodyBlob = await request.blob();
-      const bodyBuffer = Buffer.from(await bodyBlob.arrayBuffer());
-      
-      req.push(bodyBuffer);
+      // Handle Body safely
+      if (!['GET', 'HEAD'].includes(request.method || '')) {
+         try {
+             const bodyBlob = await request.blob();
+             const bodyBuffer = Buffer.from(await bodyBlob.arrayBuffer());
+             req.push(bodyBuffer);
+         } catch (e) {
+             // ignore body error
+         }
+      }
       req.push(null);
 
       // 2. Create a dummy Node.js response that captures the output
@@ -86,10 +83,26 @@ app.http('api', {
             
             const responseBody = Buffer.concat(chunks);
             
+            // Add Debug Header
+            headers['x-debug-original-url'] = request.url;
+            headers['x-debug-req-url'] = req.url || 'unknown';
+
+            // Fallback for empty error bodies
+            let finalBody = responseBody;
+            if ((statusCode === 404 || statusCode >= 500) && responseBody.length === 0) {
+                 finalBody = Buffer.from(JSON.stringify({
+                     error: "Debug: Error with empty body",
+                     status: statusCode,
+                     originalUrl: request.url,
+                     internalUrl: req.url
+                 }));
+                 headers['content-type'] = 'application/json';
+            }
+
             resolve({
                 status: statusCode,
                 headers: headers,
-                body: responseBody
+                body: finalBody
             });
             return res;
         };
@@ -106,7 +119,8 @@ app.http('api', {
         body: JSON.stringify({
           error: "Function Handler Error",
           message: err.message,
-          stack: err.stack
+          stack: err.stack,
+          url: request.url
         })
       };
     }
