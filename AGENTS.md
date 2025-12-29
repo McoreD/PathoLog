@@ -1,6 +1,7 @@
 # Agent Rules
 
-- Always summarize code changes in the final response, and use that summary when performing `git push` after each code update.
+- Always summarize code changes in the final response.
+- Automatically perform `git add .`, `git commit -m "Summary"`, and `git push` after every code update, unless the user specifically asks to review first.
 
 ## Semantic Versioning
 
@@ -57,6 +58,11 @@
 
 - Do not include secrets or tokens.
 - Avoid logging sensitive data in examples.
+
+## Debugging
+
+- Never ask the user to check DevTools.
+- Instead, surface debug information directly in the web page UI for the user to report back.
 
 ## Output Format
 

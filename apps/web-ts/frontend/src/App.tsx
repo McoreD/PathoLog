@@ -238,6 +238,8 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/health`, { credentials: "include" });
       const text = await res.text();
+      const debugDetails = `Status: ${res.status} ${res.statusText}, Type: ${res.type}, Content-Type: ${res.headers.get("content-type")}, BodyLen: ${text.length}`;
+
       if (!res.ok) {
         let detail = text.trim() || "(empty response body)";
         try {
@@ -248,18 +250,18 @@ export default function App() {
           if (parsed?.detail) {
             setHealthDetail(String(parsed.detail));
           } else {
-            setHealthDetail(null);
+            setHealthDetail(debugDetails);
           }
         } catch {
           // Use raw text.
-          setHealthDetail(null);
+          setHealthDetail(debugDetails);
         }
         setHealthError(`API health check failed: ${res.status} ${detail}`);
         return;
       }
       if (!text.trim()) {
         setHealthError("API health check failed: empty response body");
-        setHealthDetail(null);
+        setHealthDetail(debugDetails);
         return;
       }
       const data = JSON.parse(text) as { status?: string; error?: string; detail?: string };
