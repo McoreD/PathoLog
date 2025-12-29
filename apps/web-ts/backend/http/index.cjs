@@ -11,7 +11,21 @@ module.exports = async function (context, req) {
       const app = mod.app || mod.default;
       handler = createHandler(app);
     }
-    return await handler(context, req);
+
+    // azure-function-express is callback-based, so we must wrap it in a Promise
+    // to prevent the async function from returning before the response is ready.
+    return await new Promise((resolve, reject) => {
+      // Hijack context.done to resolve the promise
+      const originalDone = context.done;
+      context.done = (err, result) => {
+        if (originalDone) originalDone(err, result);
+        if (err) reject(err);
+        else resolve(result);
+      };
+      
+      // Execute the handler
+      handler(context, req);
+    });
   } catch (err) {
     const message = err && err.message ? err.message : "Unknown error";
     context.res = {
