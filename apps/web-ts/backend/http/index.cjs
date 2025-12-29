@@ -4,9 +4,17 @@ const { createHandler } = require("azure-function-express");
 
 let handler;
 
+const fs = require("fs");
+const path = require("path");
+
 module.exports = async function (context, req) {
   try {
     if (!handler) {
+      const distPath = path.resolve(__dirname, "../dist/server.js");
+      if (!fs.existsSync(distPath)) {
+        throw new Error(`Server entry point not found at ${distPath}. Did the build fail?`);
+      }
+
       const mod = await import("../dist/server.js");
       const app = mod.app || mod.default;
       handler = createHandler(app);
@@ -60,5 +68,6 @@ module.exports = async function (context, req) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ error: "Function initialization failed", detail: message }),
     };
+    return context.res;
   }
 };
