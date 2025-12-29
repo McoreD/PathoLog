@@ -149,6 +149,19 @@ button.ghost:hover,
   font-weight: 600;
 }
 
+.debug-panel {
+  border: 1px dashed #f59e0b;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(15, 23, 42, 0.7));
+}
+
+.debug-detail {
+  margin-top: 6px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.85rem;
+  color: #fbbf24;
+  word-break: break-word;
+}
+
 .debug-block {
   margin-top: 0.75rem;
   background: #0b1021;

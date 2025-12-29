@@ -170,6 +170,7 @@ export default function App() {
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const [debugError, setDebugError] = useState<string | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [healthDetail, setHealthDetail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
@@ -244,25 +245,35 @@ export default function App() {
           if (parsed?.error) {
             detail = String(parsed.error);
           }
+          if (parsed?.detail) {
+            setHealthDetail(String(parsed.detail));
+          } else {
+            setHealthDetail(null);
+          }
         } catch {
           // Use raw text.
+          setHealthDetail(null);
         }
         setHealthError(`API health check failed: ${res.status} ${detail}`);
         return;
       }
       if (!text.trim()) {
         setHealthError("API health check failed: empty response body");
+        setHealthDetail(null);
         return;
       }
-      const data = JSON.parse(text) as { status?: string; error?: string };
+      const data = JSON.parse(text) as { status?: string; error?: string; detail?: string };
       if (data?.status && data.status !== "ok") {
         setHealthError(`API health check unhealthy: ${data.error ?? "unknown error"}`);
+        setHealthDetail(data.detail ? String(data.detail) : null);
         return;
       }
       setHealthError(null);
+      setHealthDetail(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Health check failed";
       setHealthError(`API health check failed: ${message}`);
+      setHealthDetail(null);
     }
   };
 
@@ -548,8 +559,9 @@ export default function App() {
       </header>
 
       {healthError ? (
-        <div className="card">
+        <div className="card debug-panel">
           <div className="status">Backend health: {healthError}</div>
+          {healthDetail ? <div className="debug-detail">Detail: {healthDetail}</div> : null}
           <p className="muted small">
             Check `DATABASE_URL` and migrations if this persists.
           </p>
@@ -571,7 +583,11 @@ export default function App() {
         </section>
       ) : (
         <>
-          {debugError ? <div className="card"><div className="status">Error: {debugError}</div></div> : null}
+          {debugError ? (
+            <div className="card debug-panel">
+              <div className="status">Error: {debugError}</div>
+            </div>
+          ) : null}
           <section className="card" id="profile">
             <h2>Profile</h2>
             <div className="grid">
