@@ -422,8 +422,8 @@ select api_key as ApiKey
 from ai_settings
 where user_id = @UserId and provider = @Provider;";
         await using var db = Conn(cs);
-        var row = await db.QuerySingleOrDefaultAsync<(string? ApiKey)>(sql, new { UserId = userId, Provider = provider });
-        return row.ApiKey;
+        var apiKey = await db.QuerySingleOrDefaultAsync<string?>(sql, new { UserId = userId, Provider = provider });
+        return apiKey;
     }
 
     public static async Task UpsertAiKey(string cs, Guid userId, string provider, string apiKey)
