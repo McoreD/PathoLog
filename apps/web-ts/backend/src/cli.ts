@@ -2,7 +2,6 @@
 
 import fs from "fs/promises";
 import path from "path";
-import { PDFParse } from "pdf-parse";
 import { applyMigrations } from "./migrations.js";
 import { parsePdfWithAi } from "./ai.js";
 import {
@@ -84,6 +83,7 @@ function parseArgs(argv: string[]): CliArgs {
 
 async function extractText(buffer: Buffer) {
   try {
+    const { PDFParse } = await import("pdf-parse");
     const parser = new PDFParse({ data: buffer });
     const parsed = await parser.getText();
     await parser.destroy();

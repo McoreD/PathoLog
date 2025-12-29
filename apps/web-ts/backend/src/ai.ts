@@ -1,4 +1,3 @@
-import { PDFParse } from "pdf-parse";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -82,6 +81,7 @@ export async function parsePdfWithAi(args: {
 
 async function extractText(buffer: Buffer) {
   try {
+    const { PDFParse } = await import("pdf-parse");
     const parser = new PDFParse({ data: buffer });
     const parsed = await parser.getText();
     await parser.destroy();
