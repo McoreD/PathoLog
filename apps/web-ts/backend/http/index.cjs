@@ -19,8 +19,26 @@ module.exports = async function (context, req) {
       const originalDone = context.done;
       context.done = (err, result) => {
         if (originalDone) originalDone(err, result);
-        if (err) reject(err);
-        else resolve(result);
+        
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        // Azure Functions v4 async model expects the response to be returned.
+        // azure-function-express might pass it as 'result' or set 'context.res'.
+        const response = result || context.res;
+        
+        if (!response) {
+          // Fallback if the library failed to produce a response object
+          context.res = {
+            status: 500,
+            body: "Debug: handler completed but no response object found (result or context.res)"
+          };
+          resolve(context.res);
+        } else {
+          resolve(response);
+        }
       };
       
       // Execute the handler
