@@ -39,6 +39,7 @@ import { query } from "./db.js";
 import { parsePdfWithAi } from "./ai.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+let migrationError: string | null = null;
 
 if (env.APPINSIGHTS_CONNECTION_STRING) {
   appInsights.setup(env.APPINSIGHTS_CONNECTION_STRING).setSendLiveMetrics(true).start();
@@ -140,6 +141,9 @@ function toCsvRow(fields: (string | number | null | undefined)[]) {
 }
 
 app.get("/health", async (_req, res) => {
+  if (migrationError) {
+    return res.status(503).json({ status: "unhealthy", error: `migrations_failed: ${migrationError}` });
+  }
   try {
     await query("select 1");
     res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -585,13 +589,17 @@ async function ensureDefaultUser() {
 }
 
 async function start() {
-  await applyMigrations();
-  await ensureDefaultUser();
+  try {
+    await applyMigrations();
+    await ensureDefaultUser();
+    migrationError = null;
+  } catch (err) {
+    migrationError = err instanceof Error ? err.message : "unknown_migration_error";
+    logger.error({ err }, "Startup failed; continuing to serve for diagnostics");
+  }
 }
 
-start().catch((err) => {
-  logger.error({ err }, "Startup failed; continuing to serve for diagnostics");
-});
+start();
 
 if (process.env.PATHOLOG_LISTEN !== "false") {
   const port = Number(process.env.PORT || env.API_PORT || 4000);

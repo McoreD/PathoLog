@@ -169,6 +169,7 @@ export default function App() {
   const [status, setStatus] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const [debugError, setDebugError] = useState<string | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
@@ -194,6 +195,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      await checkHealth();
       const authUser = await loadAuthPrincipal();
       if (authUser) {
         setUser(authUser);
@@ -229,6 +231,39 @@ export default function App() {
     const message = err instanceof Error ? err.message : fallback;
     setStatus(fallback);
     setDebugError(`${action}: ${message}`);
+  };
+
+  const checkHealth = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/health`, { credentials: "include" });
+      const text = await res.text();
+      if (!res.ok) {
+        let detail = text.trim() || "(empty response body)";
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.error) {
+            detail = String(parsed.error);
+          }
+        } catch {
+          // Use raw text.
+        }
+        setHealthError(`API health check failed: ${res.status} ${detail}`);
+        return;
+      }
+      if (!text.trim()) {
+        setHealthError("API health check failed: empty response body");
+        return;
+      }
+      const data = JSON.parse(text) as { status?: string; error?: string };
+      if (data?.status && data.status !== "ok") {
+        setHealthError(`API health check unhealthy: ${data.error ?? "unknown error"}`);
+        return;
+      }
+      setHealthError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Health check failed";
+      setHealthError(`API health check failed: ${message}`);
+    }
   };
 
   const loadPatients = async () => {
@@ -511,6 +546,15 @@ export default function App() {
           ) : null}
         </div>
       </header>
+
+      {healthError ? (
+        <div className="card">
+          <div className="status">Backend health: {healthError}</div>
+          <p className="muted small">
+            Check `DATABASE_URL` and migrations if this persists.
+          </p>
+        </div>
+      ) : null}
 
       {!user ? (
         <section className="card">
