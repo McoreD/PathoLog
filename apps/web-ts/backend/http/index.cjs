@@ -21,7 +21,16 @@ module.exports = async function (context, req) {
         if (originalDone) originalDone(err, result);
         
         if (err) {
-          reject(err);
+          context.res = {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              error: "Adapter Error",
+              message: err instanceof Error ? err.message : String(err),
+              stack: err instanceof Error ? err.stack : undefined
+            })
+          };
+          resolve(context.res);
           return;
         }
 
