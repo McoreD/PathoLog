@@ -69,6 +69,21 @@
 - For changes, summarize what changed and where.
 - Provide next steps only when they are natural and actionable.
 
+## Deployment URLs
+
+- **web-ts**: https://gentle-desert-0814a2000.2.azurestaticapps.net/
+- **web-csharp**: https://delightful-hill-09e4dbc1e.2.azurestaticapps.net/
+
+## TODO
+
+### web-csharp Issues
+
+- Fix "Create patient" 500 error with empty response body when adding patient via `/api/patients` POST endpoint.
+
+### web-ts Issues
+
+- Fix health check error: `Unexpected token '<', "<!DOCTYPE "... is not valid JSON`. Backend is returning HTML instead of JSON.
+
 ## Branch mirroring
 
 - Mirror relevant updates to the dev-web-ts and dev-web-csharp branches unless explicitly told not to.
