@@ -9,8 +9,9 @@ async function getExpressApp() {
   
   try {
     // Dynamic import of the compiled Express app
-    const mod = await import("./server.js");
-    appExpress = mod.app || mod.default;
+    const mod = await import("./server.js") as any;
+    appExpress = mod.app;
+    if (!appExpress) throw new Error("Module ./server.js does not export 'app'");
     return appExpress;
   } catch (err: any) {
     throw new Error(`Failed to load Express app: ${err.message}`);
